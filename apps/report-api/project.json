@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "report-api",
+  "projectType": "application",
+  "sourceRoot": "apps/report-api/src",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx watch --tsconfig apps/report-api/tsconfig.json apps/report-api/src/main.ts"
+      }
+    }
+  },
+  "tags": []
+}

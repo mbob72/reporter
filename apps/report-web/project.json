@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "report-web",
+  "projectType": "application",
+  "sourceRoot": "apps/report-web/src",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --config apps/report-web/vite.config.ts"
+      }
+    }
+  },
+  "tags": []
+}

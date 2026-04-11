@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "outDir": "../../dist/out-tsc/report-api"
+  },
+  "include": ["src/**/*.ts"]
+}
