@@ -1,0 +1,17 @@
+node_modules
+dist
+.tmp
+tmp
+coverage
+.nx
+.DS_Store
+
+.env
+.env.local
+.env.*.local
+
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
