@@ -1,12 +1,11 @@
-import type { IncomingHttpHeaders } from 'node:http';
-
 import type { ApiError, CurrentUser } from '@contracts';
 
 import { DEFAULT_MOCK_USER_ID, type MockUserId, mockUsers } from './users.mock';
 
 export const MOCK_USER_HEADER = 'x-mock-user';
 
-type HeadersLike = IncomingHttpHeaders | Record<string, string | string[] | undefined>;
+type HeaderValue = string | string[] | undefined;
+type HeadersLike = Record<string, HeaderValue>;
 
 function readHeader(headers: HeadersLike | undefined, key: string): string | undefined {
   if (!headers) {

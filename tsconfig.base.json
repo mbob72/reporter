@@ -15,7 +15,8 @@
       "@contracts": ["libs/contracts/src/index.ts"],
       "@auth": ["libs/auth/src/index.ts"],
       "@data-access": ["libs/data-access/src/index.ts"],
-      "@reporting": ["libs/reporting/src/index.ts"]
+      "@reporting": ["libs/reporting/src/index.ts"],
+      "@api-client": ["libs/api-client/src/index.ts"]
     }
   }
 }

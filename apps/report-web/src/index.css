@@ -1,38 +1,145 @@
 :root {
-  font-family: sans-serif;
-  color: #111827;
-  background: #f3f4f6;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #1f2933;
+  background:
+    radial-gradient(circle at top, rgba(233, 196, 106, 0.28), transparent 32%),
+    linear-gradient(180deg, #f8f4ec 0%, #efe5d2 100%);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
 }
 
-button {
+button,
+input,
+select {
   font: inherit;
 }
 
-.app {
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
   min-height: 100vh;
   display: grid;
   place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: min(100%, 560px);
+  background: rgba(255, 252, 247, 0.88);
+  border: 1px solid rgba(117, 87, 38, 0.18);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 18px 50px rgba(69, 54, 29, 0.14);
+}
+
+.panel-header h1,
+.result-card h2,
+.error-card h2 {
+  margin: 0;
+}
+
+.panel-header {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  color: #8d5c11;
+}
+
+.description {
+  margin: 12px 0 0;
+  color: #52606d;
+  line-height: 1.5;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #cbb89c;
+  border-radius: 12px;
+  background: #fffdfa;
 }
 
 .button {
-  padding: 12px 24px;
   border: 0;
-  border-radius: 10px;
-  background: #2563eb;
-  color: #ffffff;
+  border-radius: 999px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #8d5c11, #c2841b);
+  color: #fffdf8;
   cursor: pointer;
 }
 
 .button:disabled {
   cursor: progress;
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
-.message {
-  font-size: 32px;
+.result-card,
+.error-card {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 18px;
+}
+
+.result-card {
+  background: rgba(232, 245, 233, 0.86);
+  border: 1px solid rgba(46, 125, 50, 0.18);
+}
+
+.error-card {
+  background: rgba(253, 237, 237, 0.92);
+  border: 1px solid rgba(198, 40, 40, 0.18);
+}
+
+.result-grid {
+  margin: 14px 0 0;
+  display: grid;
+  gap: 12px;
+}
+
+.result-grid dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #52606d;
+}
+
+.result-grid dd,
+.error-code {
+  margin: 4px 0 0;
   font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 22px;
+  }
 }
