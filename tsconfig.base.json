@@ -12,11 +12,14 @@
     "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
-      "@contracts": ["libs/contracts/src/index.ts"],
-      "@auth": ["libs/auth/src/index.ts"],
-      "@data-access": ["libs/data-access/src/index.ts"],
-      "@reporting": ["libs/reporting/src/index.ts"],
-      "@api-client": ["libs/api-client/src/index.ts"]
+      "@report-platform/contracts": ["libs/report-platform/contracts/src/index.ts"],
+      "@report-platform/auth": ["libs/report-platform/auth/src/index.ts"],
+      "@report-platform/data-access": ["libs/report-platform/data-access/src/index.ts"],
+      "@report-platform/registry": ["libs/report-platform/registry/src/index.ts"],
+      "@report-platform/api-client": ["libs/report-platform/api-client/src/index.ts"],
+      "@report-definitions/simple-sales-summary": [
+        "libs/report-definitions/simple-sales-summary/src/index.ts"
+      ]
     }
   }
 }

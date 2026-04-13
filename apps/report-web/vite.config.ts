@@ -10,9 +10,21 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@contracts': fileURLToPath(new URL('../../libs/contracts/src/index.ts', import.meta.url)),
-      '@auth': fileURLToPath(new URL('../../libs/auth/src/index.ts', import.meta.url)),
-      '@api-client': fileURLToPath(new URL('../../libs/api-client/src/index.ts', import.meta.url)),
+      '@report-platform/contracts': fileURLToPath(
+        new URL('../../libs/report-platform/contracts/src/index.ts', import.meta.url),
+      ),
+      '@report-platform/auth': fileURLToPath(
+        new URL('../../libs/report-platform/auth/src/index.ts', import.meta.url),
+      ),
+      '@report-platform/api-client': fileURLToPath(
+        new URL('../../libs/report-platform/api-client/src/index.ts', import.meta.url),
+      ),
+      '@report-definitions/simple-sales-summary': fileURLToPath(
+        new URL(
+          '../../libs/report-definitions/simple-sales-summary/src/index.ts',
+          import.meta.url,
+        ),
+      ),
     },
   },
   server: {

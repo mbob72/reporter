@@ -69,6 +69,12 @@ select {
   gap: 16px;
 }
 
+.report-description {
+  margin: -2px 0 2px;
+  color: #52606d;
+  font-size: 14px;
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -136,6 +142,21 @@ select {
 .error-code {
   margin: 4px 0 0;
   font-weight: 700;
+}
+
+.result-json {
+  margin: 14px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(19, 30, 44, 0.82);
+  color: #f4f6f8;
+  overflow: auto;
+  font-size: 13px;
+}
+
+.status-text {
+  margin: 20px 0 0;
+  color: #52606d;
 }
 
 @media (max-width: 640px) {

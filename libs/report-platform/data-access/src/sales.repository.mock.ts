@@ -1,5 +1,5 @@
-import type { ApiError, CurrentUser } from '@contracts';
-import { canAccessTenantData } from '@auth';
+import type { ApiError, CurrentUser } from '@report-platform/contracts';
+import { canAccessTenantData } from '@report-platform/auth';
 
 import type { SalesRepository } from './sales.repository';
 

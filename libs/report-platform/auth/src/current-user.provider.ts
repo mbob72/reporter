@@ -1,4 +1,4 @@
-import type { ApiError, CurrentUser } from '@contracts';
+import type { ApiError, CurrentUser } from '@report-platform/contracts';
 
 import { DEFAULT_MOCK_USER_ID, type MockUserId, mockUsers } from './users.mock';
 

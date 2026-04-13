@@ -1,337 +1,371 @@
-2. Credentials
-ServiceCredentialRef is a reference, not actual credentials
-Only the platform resolves it (e.g. via Vault / Secrets Manager)
-Reports must never access raw credentials
-3. Data Access Rules (CRITICAL)
-
-Reports must NEVER:
-
-access raw DB clients
-execute arbitrary SQL
-access external APIs directly
-
-Reports may ONLY access data via:
-
-repositories
-approved query gateway
-datasource adapters
-
-These components must enforce:
-
-tenant scoping
-role-based restrictions
-allowed fields/queries
-4. Layering
-libs/
-  report-platform/
-    contracts/     → types & interfaces only
-    runtime/       → runtime factory & orchestration
-    data-access/   → repositories, query gateway, adapters
-
-  report-definitions/
-    <domain>/      → report implementations
-5. Dependency Rules
-report-definitions:
-CAN depend on: contracts, runtime APIs
-MUST NOT depend on: data-access implementations, DB clients, infra
-data-access:
-implements contracts
-can depend on infra (DB, APIs)
-runtime:
-wires everything together
-6. Nx Constraints
-
-Use Nx tags to enforce boundaries:
-
-type:platform
-type:data-access
-type:report
-type:shared
-
-Reports must not import infra or internal implementations.
-
-Engineering Guidelines
-Prefer small, composable abstractions
-Always pass ReportExecutionContext explicitly
-All data access must be scoped via context
-Avoid hidden side effects
-Code should be testable with mocked runtime
-What to do when implementing features
-
-When adding new functionality:
-
-Define interfaces in contracts
-Implement logic in data-access
-Wire dependencies in runtime
-Use them in report definitions
-
-Never bypass this flow.
-
-Testing
-
-Reports must be testable with mocked runtime:
-
-mock repositories
-mock query gateway
-mock adapters
-Goal
-
-The platform must guarantee that:
-even if a report is implemented incorrectly,
-it cannot access unauthorized data.
-
-
----
-
-# 📄 2. `docs/reporting-architecture.md`
-
-(создай папку `docs/` если нет)
-
-```md
 # Reporting Platform Architecture
 
-## Motivation
+## Overview
 
-We are building a reporting platform that:
+This project implements a reporting platform designed to:
 
-- supports multi-tenant data access
-- enforces strict security boundaries
-- separates report logic from infrastructure
-- allows independent release cycles for:
+- support multi-tenant data access
+- enforce strict security boundaries
+- separate report logic from infrastructure
+- allow independent evolution of:
   - platform
   - data-access
   - report definitions
 
+The platform is built as an Nx monorepo with clear separation between:
+- applications (API, UI)
+- platform libraries
+- report implementations
+
 ---
 
-## Key Idea
+## Core Principle
 
-Reports are **pure business logic**.
+**Reports are pure business logic.**
 
-They do NOT:
-- connect to databases
-- access credentials
-- construct queries freely
+Reports must NOT:
+- access databases directly
+- use credentials
+- construct arbitrary queries
+- call external APIs directly
 
-They operate on a controlled runtime provided by the platform.
+Reports operate only through a **controlled runtime** provided by the platform.
+
+---
+
+## High-Level Architecture
+
+```txt
+apps/
+  report-api       → NestJS API (entry point)
+  report-web       → React UI
+
+libs/
+  report-platform/
+    contracts      → shared types & validation schemas
+    auth           → user resolution & access policy
+    data-access    → repositories (DB access layer)
+    registry       → report discovery & execution mapping
+    api-client     → frontend client for API
+
+  report-definitions/
+    <report-name>  → individual report implementations
+```
 
 ---
 
 ## Execution Flow
 
-1. User triggers report execution
-2. Platform:
-   - authenticates user
-   - determines role
-   - builds `ReportExecutionContext`
-   - determines allowed access scope
-   - selects credential references
-3. Platform builds runtime:
-   - resolves credentials
-   - creates repositories / gateways / adapters
-4. Report executes using runtime only
+1. User triggers report execution via UI
+2. API:
+   - resolves current user
+   - validates input
+   - finds report by `reportCode`
+3. Platform:
+   - applies access rules
+   - calls report definition
+4. Report:
+   - uses repositories to fetch data
+   - returns structured result
+5. API returns response to UI
 
 ---
 
-## ReportExecutionContext
+## Report Definition Model
+
+Each report is defined as:
 
 ```ts
-type ReportExecutionContext = {
-  initiator: {
-    userId: string;
-    role: Role;
-    tenantId: string;
-  };
-  accessScope: {
-    tenantIds: string[];
-    mode: 'tenant' | 'global';
-  };
-  credentials: {
-    reportingDb: ServiceCredentialRef;
-  };
+type ReportDefinition<TResult = unknown> = {
+  code: string;
+  title: string;
+  description: string;
+  launch: (currentUser: CurrentUser, params: unknown) => Promise<TResult>;
 };
-Controlled Data Access
-Problem
+```
 
-If reports receive raw DB access:
-
-developer may forget tenant filter
-developer may access unauthorized tables
-developer may leak cross-tenant data
-Solution
-
-Reports do NOT receive DB client.
-
-Instead they receive controlled abstractions:
-
-Option 1: Repositories
-
-High-level, domain-oriented access.
-
-runtime.repositories.revenue.getRevenueByPeriod(...)
-
-Responsibilities:
-
-apply tenant scope
-restrict fields
-enforce access rules
-
-Best for:
-
-standard queries
-well-defined domain logic
-Option 2: Query Gateway
-
-Controlled query execution.
-
-runtime.queryGateway.run('revenue-summary', params)
-
-Characteristics:
-
-only predefined queries allowed
-parameters validated
-scope injected automatically
-
-Best for:
-
-analytical reports
-flexible aggregations
-Option 3: Datasource Adapters
-
-Source-specific access.
-
-runtime.dataSources.crm.loadCustomers()
-
-Characteristics:
-
-wraps external systems or DBs
-applies scope internally
-hides connection details
-
-Best for:
-
-multiple data sources
-external APIs
-data warehouse integrations
-Runtime Composition
-type ReportRuntime = {
-  context: ReportExecutionContext;
-
-  repositories: {
-    revenue: RevenueRepository;
-  };
-
-  queryGateway: QueryGateway;
-
-  dataSources: {
-    crm: CrmAdapter;
-  };
-};
-Runtime Factory
-
-Platform builds runtime per execution:
-
-class ReportRuntimeFactory {
-  async create(ctx: ReportExecutionContext): Promise<ReportRuntime> {
-    const db = await resolveDb(ctx.credentials.reportingDb);
-
-    return {
-      context: ctx,
-      repositories: {
-        revenue: new RevenueRepository(db, ctx),
-      },
-      queryGateway: new QueryGateway(db, ctx),
-      dataSources: {
-        crm: new CrmAdapter(ctx),
-      },
-    };
-  }
-}
-Security Model
-
-Security is enforced at multiple levels:
-
-Role-based access (who can run report)
-Access scope (which tenants are visible)
-Credential selection (technical user)
-Data access layer (repositories/gateway/adapters)
-
-Even if report code is incorrect,
-data access must still be safe.
-
-Nx Structure
-apps/
-  report-api/
-  report-runner/
-
-libs/
-  report-platform/
-    contracts/
-    runtime/
-    data-access/
-
-  report-definitions/
-    sales/
-    finance/
-Release Strategy
-
-Independent release cycles:
-
-platform (slow, stable)
-data-access (moderate)
-report-definitions (fast)
-Design Constraints
-No raw DB access in reports
-No credential leakage
-All data access must go through controlled interfaces
-Context must be explicitly passed
-All abstractions must be testable
-Example Report
-const revenueReport = {
-  code: 'revenue',
-
-  async run(runtime, params) {
-    return runtime.repositories.revenue.getRevenueByPeriod(params);
-  },
-};
-Testing Strategy
-
-Reports are tested using mocked runtime:
-
-const mockRuntime = {
-  repositories: {
-    revenue: {
-      getRevenueByPeriod: async () => [{ total: 1000 }],
-    },
-  },
-};
-Long-Term Vision
-add audit logging
-add query tracing
-support async/long-running reports
-support caching
-support report versioning
-support UI-driven report configuration
+Key idea:
+- `code` is the stable identifier
+- `launch` is the entry point
+- report is stateless and pure (given inputs + repositories)
 
 ---
 
-# 🚀 Как дальше использовать это с агентом
+## Report Registry
 
-В IDE (Codex / любой AI-плагин) просто пиши:
+The platform uses a registry to manage reports:
 
-**Стартовый промпт:**
-```text
-Read AGENTS.md and docs/reporting-architecture.md.
+```ts
+class ReportRegistry {
+  listReports(): ReportListItem[];
+  getReport(code: string): ReportDefinition | undefined;
+}
+```
 
-Create initial Nx structure:
-- libs/report-platform/contracts
-- libs/report-platform/runtime
-- libs/report-platform/data-access
-- libs/report-definitions/sales
+Responsibilities:
+- store all available reports
+- expose list for UI
+- resolve report by `reportCode`
 
-Define minimal types for:
-- ReportExecutionContext
-- ReportRuntime
-- RevenueRepository
+---
 
-Keep implementation minimal and consistent with architecture.
+## API Design
+
+### List Reports
+
+```http
+GET /reports
+```
+
+Response:
+
+```json
+[
+  {
+    "code": "simple-sales-summary",
+    "title": "Simple Sales Summary",
+    "description": "Shows tenant, organization, and current sales amount"
+  }
+]
+```
+
+---
+
+### Launch Report
+
+```http
+POST /reports/:reportCode/launch
+```
+
+Body:
+
+```json
+{
+  "params": { ... }
+}
+```
+
+---
+
+## Contracts Layer (`report-platform/contracts`)
+
+Contains:
+- shared types
+- zod schemas
+- API contracts
+
+Examples:
+- `CurrentUser`
+- `Role`
+- `ApiError`
+- `ReportListItem`
+- `LaunchReportBody`
+
+### Rule
+
+Contracts must be:
+- stable
+- framework-independent
+- reused across API, UI, and reports
+
+---
+
+## Auth Layer (`report-platform/auth`)
+
+Responsibilities:
+- resolve current user (mock for now)
+- enforce access rules
+
+Example:
+
+```ts
+function canAccessTenantData(user, tenantId): boolean
+```
+
+### Rule
+
+Auth logic:
+- must not depend on DB
+- must be deterministic
+- must be reusable across platform
+
+---
+
+## Data Access Layer (`report-platform/data-access`)
+
+Contains:
+- repository interfaces
+- repository implementations (mock for now)
+
+Example:
+
+```ts
+interface SalesRepository {
+  getCurrentSalesAmount(user, tenantId, organizationId): Promise<number>;
+}
+```
+
+### Responsibilities
+
+Repositories must:
+- enforce tenant access
+- enforce role restrictions
+- control available queries
+
+### Critical Rule
+
+Reports must NOT:
+- bypass repositories
+- access DB clients directly
+
+---
+
+## Report Definitions (`report-definitions/*`)
+
+Each report lives in its own module:
+
+```txt
+simple-sales-summary/
+  contract.ts
+  service.ts
+  definition.ts
+```
+
+### Responsibilities
+
+- validate params
+- orchestrate repository calls
+- format result
+
+### Example
+
+```ts
+const report = {
+  code: 'simple-sales-summary',
+  async launch(user, params) {
+    return service.run(user, params);
+  }
+};
+```
+
+---
+
+## Dependency Rules
+
+### Allowed
+
+```txt
+report-definitions → contracts
+report-definitions → data-access
+report-api → platform libs
+report-web → contracts + api-client
+```
+
+### Forbidden
+
+```txt
+report-definitions → direct DB access
+report-definitions → external APIs
+report-definitions → infrastructure
+```
+
+---
+
+## Security Model
+
+Security is enforced in layers:
+
+1. **User identity**
+2. **Role-based access**
+3. **Tenant scoping**
+4. **Repository-level enforcement**
+
+Even if a report is implemented incorrectly,
+it must NOT be able to access unauthorized data.
+
+---
+
+## API Client (`report-platform/api-client`)
+
+Frontend interacts via:
+
+```ts
+listReports()
+launchReport(reportCode, params)
+```
+
+Responsibilities:
+- validate inputs
+- handle API errors
+- normalize responses
+
+---
+
+## UI Responsibilities (`report-web`)
+
+- fetch report list
+- allow report selection
+- collect params
+- trigger execution
+- render result
+
+UI must NOT:
+- contain business logic
+- know about repositories
+- bypass API
+
+---
+
+## Design Constraints
+
+- No raw DB access in reports
+- No credential exposure
+- All data access via repositories
+- All inputs validated via zod
+- All layers loosely coupled
+
+---
+
+## Testing Strategy
+
+Reports must be testable via mocks:
+
+```ts
+const mockRuntime = {
+  repositories: { ... }
+};
+```
+
+This allows:
+- unit testing report logic
+- no dependency on real DB
+- fast feedback loop
+
+---
+
+## Future Extensions
+
+Planned evolution:
+
+- async report execution (queues, workers)
+- audit logging
+- caching
+- report versioning
+- UI-driven report configuration
+- query tracing
+
+---
+
+## Summary
+
+This architecture ensures:
+
+- strong separation of concerns
+- safe data access
+- scalable report development
+- clear extension points
+
+The platform guarantees that:
+
+> Even if a report is implemented incorrectly,
+> it cannot access unauthorized data.

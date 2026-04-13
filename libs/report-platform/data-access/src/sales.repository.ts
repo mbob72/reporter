@@ -1,4 +1,4 @@
-import type { CurrentUser } from '@contracts';
+import type { CurrentUser } from '@report-platform/contracts';
 
 export interface SalesRepository {
   getCurrentSalesAmount(

@@ -1,33 +1,34 @@
-import type {
-  CurrentUser,
-  LaunchSimpleReportRequest,
-  SimpleReportResponse,
-} from '@contracts';
-import type { SalesRepository, TenantRepository } from '@data-access';
+import type { CurrentUser } from '@report-platform/contracts';
+import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
 
-export class SimpleReportService {
+import type {
+  SimpleSalesSummaryParams,
+  SimpleSalesSummaryResult,
+} from './simple-sales-summary.contract';
+
+export class SimpleSalesSummaryService {
   constructor(
     private readonly tenantRepository: TenantRepository,
     private readonly salesRepository: SalesRepository,
   ) {}
 
-  async runSimpleReport(
+  async run(
     currentUser: CurrentUser,
-    request: LaunchSimpleReportRequest,
-  ): Promise<SimpleReportResponse> {
+    params: SimpleSalesSummaryParams,
+  ): Promise<SimpleSalesSummaryResult> {
     const tenantName = await this.tenantRepository.getTenantName(
       currentUser,
-      request.tenantId,
+      params.tenantId,
     );
     const organizationName = await this.tenantRepository.getOrganizationName(
       currentUser,
-      request.tenantId,
-      request.organizationId,
+      params.tenantId,
+      params.organizationId,
     );
     const currentSalesAmount = await this.salesRepository.getCurrentSalesAmount(
       currentUser,
-      request.tenantId,
-      request.organizationId,
+      params.tenantId,
+      params.organizationId,
     );
 
     return {

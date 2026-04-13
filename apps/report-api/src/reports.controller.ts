@@ -1,26 +1,28 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpException,
   HttpStatus,
   Inject,
   Logger,
+  Param,
   Post,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { getCurrentUser, MOCK_USER_HEADER } from '@auth';
+import { getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
 import {
   ApiErrorSchema,
-  LaunchSimpleReportRequestSchema,
-  SimpleReportResponseSchema,
-} from '@contracts';
-import type { ApiError } from '@contracts';
-import { SimpleReportService } from '@reporting';
+  LaunchReportBodySchema,
+  ReportListResponseSchema,
+} from '@report-platform/contracts';
+import type { ApiError } from '@report-platform/contracts';
+import { ReportRegistry } from '@report-platform/registry';
 
-import { SIMPLE_REPORT_SERVICE_TOKEN } from './reporting.providers';
+import { REPORT_REGISTRY_TOKEN } from './reporting.providers';
 
 function toHttpException(error: unknown): HttpException {
   const parsedError = ApiErrorSchema.safeParse(error);
@@ -47,16 +49,42 @@ export class ReportsController {
   private readonly logger = new Logger(ReportsController.name);
 
   constructor(
-    @Inject(SIMPLE_REPORT_SERVICE_TOKEN)
-    private readonly simpleReportService: SimpleReportService,
+    @Inject(REPORT_REGISTRY_TOKEN)
+    private readonly reportRegistry: ReportRegistry,
   ) {}
 
-  @Post('simple-sales-summary/launch')
+  @Get()
   @HttpCode(200)
-  async launchSimpleSalesSummary(@Body() body: unknown, @Req() req: Request) {
-    const parsedRequest = LaunchSimpleReportRequestSchema.safeParse(body);
+  async listReports(@Req() req: Request) {
+    try {
+      const currentUser = getCurrentUser(req.headers);
+      const reportList = this.reportRegistry.listReports();
+      const parsedResponse = ReportListResponseSchema.safeParse(reportList);
 
-    if (!parsedRequest.success) {
+      if (!parsedResponse.success) {
+        throw new Error('Invalid report list response.');
+      }
+
+      this.logger.log(
+        `list reports count=${parsedResponse.data.length} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
+      );
+
+      return parsedResponse.data;
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
+  @Post(':reportCode/launch')
+  @HttpCode(200)
+  async launchReport(
+    @Param('reportCode') reportCode: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    const parsedBody = LaunchReportBodySchema.safeParse(body);
+
+    if (!parsedBody.success) {
       throw new HttpException(
         {
           code: 'VALIDATION_ERROR',
@@ -66,24 +94,26 @@ export class ReportsController {
       );
     }
 
+    const reportDefinition = this.reportRegistry.getReport(reportCode);
+
+    if (!reportDefinition) {
+      throw new HttpException(
+        {
+          code: 'NOT_FOUND',
+          message: `Unknown report: ${reportCode}`,
+        } satisfies ApiError,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
     try {
       const currentUser = getCurrentUser(req.headers);
 
       this.logger.log(
-        `launch simple-sales-summary tenant=${parsedRequest.data.tenantId} organization=${parsedRequest.data.organizationId} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
+        `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
       );
 
-      const report = await this.simpleReportService.runSimpleReport(
-        currentUser,
-        parsedRequest.data,
-      );
-      const parsedResponse = SimpleReportResponseSchema.safeParse(report);
-
-      if (!parsedResponse.success) {
-        throw new Error('Invalid report response.');
-      }
-
-      return parsedResponse.data;
+      return await reportDefinition.launch(currentUser, parsedBody.data.params);
     } catch (error) {
       throw toHttpException(error);
     }
