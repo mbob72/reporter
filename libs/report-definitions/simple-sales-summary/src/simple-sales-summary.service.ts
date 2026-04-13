@@ -18,17 +18,17 @@ export class SimpleSalesSummaryService {
   ): Promise<SimpleSalesSummaryResult> {
     const tenantName = await this.tenantRepository.getTenantName(
       currentUser,
-      params.tenantId,
+      params.tenant,
     );
     const organizationName = await this.tenantRepository.getOrganizationName(
       currentUser,
-      params.tenantId,
-      params.organizationId,
+      params.tenant,
+      params.organization,
     );
     const currentSalesAmount = await this.salesRepository.getCurrentSalesAmount(
       currentUser,
-      params.tenantId,
-      params.organizationId,
+      params.tenant,
+      params.organization,
     );
 
     return {

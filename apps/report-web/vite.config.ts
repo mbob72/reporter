@@ -34,6 +34,9 @@ export default defineConfig({
       '/reports': {
         target: 'http://127.0.0.1:3000',
       },
+      '/tenants': {
+        target: 'http://127.0.0.1:3000',
+      },
     },
   },
 });

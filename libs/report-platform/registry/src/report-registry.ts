@@ -2,6 +2,7 @@ import type {
   CurrentUser,
   ReportCode,
   ReportListItem,
+  ReportMetadata,
 } from '@report-platform/contracts';
 import { ReportCodeSchema } from '@report-platform/contracts';
 
@@ -11,11 +12,18 @@ export type ReportDefinition<TResult = unknown> = {
   code: ReportCode;
   title: string;
   description: string;
+  getMetadata: (currentUser: CurrentUser) => ReportMetadata;
   launch: (currentUser: CurrentUser, params: unknown) => Promise<TResult>;
 };
 
 export class ReportRegistry {
   private readonly reportsByCode = new Map<string, ReportDefinition>();
+  private readonly defaultMetadataUser: CurrentUser = {
+    userId: 'metadata-system',
+    role: 'Admin',
+    tenantId: null,
+    organizationId: null,
+  };
 
   constructor(reportDefinitions: ReportDefinition[]) {
     for (const reportDefinition of reportDefinitions) {
@@ -39,5 +47,26 @@ export class ReportRegistry {
 
   getReport(reportCode: string): ReportDefinition | undefined {
     return this.reportsByCode.get(reportCode);
+  }
+
+  listReportMetadata(currentUser?: CurrentUser): ReportMetadata[] {
+    const metadataUser = currentUser ?? this.defaultMetadataUser;
+
+    return Array.from(this.reportsByCode.values()).map((reportDefinition) =>
+      reportDefinition.getMetadata(metadataUser),
+    );
+  }
+
+  getReportMetadata(
+    reportCode: string,
+    currentUser?: CurrentUser,
+  ): ReportMetadata | undefined {
+    const reportDefinition = this.getReport(reportCode);
+
+    if (!reportDefinition) {
+      return undefined;
+    }
+
+    return reportDefinition.getMetadata(currentUser ?? this.defaultMetadataUser);
   }
 }

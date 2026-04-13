@@ -1,4 +1,8 @@
-import type { ApiError, CurrentUser } from '@report-platform/contracts';
+import type {
+  ApiError,
+  CurrentUser,
+  ReportMetadata,
+} from '@report-platform/contracts';
 import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
 import type { ReportDefinition } from '@report-platform/registry';
 
@@ -31,10 +35,38 @@ export function createSimpleSalesSummaryDefinition(
     options.salesRepository,
   );
 
-  return {
+  const baseMetadata = {
     code: SIMPLE_SALES_SUMMARY_REPORT_CODE,
     title: 'Simple Sales Summary',
     description: 'Shows tenant, organization, and current sales amount.',
+    minRoleToLaunch: 'TenantAdmin',
+  } as const;
+
+  return {
+    code: baseMetadata.code,
+    title: baseMetadata.title,
+    description: baseMetadata.description,
+    getMetadata(currentUser: CurrentUser): ReportMetadata {
+      return {
+        ...baseMetadata,
+        fields: [
+          {
+            name: 'tenant',
+            label: 'Tenant',
+            kind: 'tenant',
+            required: true,
+            source: currentUser.role === 'Admin' ? 'select' : 'user-context',
+          },
+          {
+            name: 'organization',
+            label: 'Organization',
+            kind: 'organization',
+            required: true,
+            source: 'select',
+          },
+        ],
+      };
+    },
     async launch(
       currentUser: CurrentUser,
       params: unknown,

@@ -13,10 +13,19 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
+import {
+  canAccessTenantData,
+  getCurrentUser,
+  MOCK_USER_HEADER,
+} from '@report-platform/auth';
+import {
+  getAllTenants,
+  getOrganizationsByTenant,
+} from '@report-platform/data-access';
 import {
   ApiErrorSchema,
   LaunchReportBodySchema,
+  ReportMetadataSchema,
   ReportListResponseSchema,
 } from '@report-platform/contracts';
 import type { ApiError } from '@report-platform/contracts';
@@ -44,7 +53,7 @@ function toHttpException(error: unknown): HttpException {
   );
 }
 
-@Controller('reports')
+@Controller()
 export class ReportsController {
   private readonly logger = new Logger(ReportsController.name);
 
@@ -53,7 +62,7 @@ export class ReportsController {
     private readonly reportRegistry: ReportRegistry,
   ) {}
 
-  @Get()
+  @Get('reports')
   @HttpCode(200)
   async listReports(@Req() req: Request) {
     try {
@@ -75,7 +84,79 @@ export class ReportsController {
     }
   }
 
-  @Post(':reportCode/launch')
+  @Get('reports/:code/metadata')
+  @HttpCode(200)
+  async getReportMetadata(
+    @Param('code') reportCode: string,
+    @Req() req: Request,
+  ) {
+    try {
+      const currentUser = getCurrentUser(req.headers);
+      const reportMetadata = this.reportRegistry.getReportMetadata(reportCode, currentUser);
+
+      if (!reportMetadata) {
+        throw {
+          code: 'NOT_FOUND',
+          message: `Unknown report: ${reportCode}`,
+        } satisfies ApiError;
+      }
+
+      const parsedMetadata = ReportMetadataSchema.safeParse(reportMetadata);
+
+      if (!parsedMetadata.success) {
+        throw new Error('Invalid report metadata.');
+      }
+
+      return parsedMetadata.data;
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
+  @Get('tenants')
+  @HttpCode(200)
+  async listTenants(@Req() req: Request) {
+    try {
+      const currentUser = getCurrentUser(req.headers);
+      const allTenants = getAllTenants();
+
+      if (currentUser.role === 'Admin') {
+        return allTenants;
+      }
+
+      if (currentUser.role === 'TenantAdmin' && currentUser.tenantId) {
+        return allTenants.filter((tenantOption) => tenantOption.id === currentUser.tenantId);
+      }
+
+      return [];
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
+  @Get('tenants/:tenantId/organizations')
+  @HttpCode(200)
+  async listOrganizationsByTenant(
+    @Param('tenantId') tenantId: string,
+    @Req() req: Request,
+  ) {
+    try {
+      const currentUser = getCurrentUser(req.headers);
+
+      if (!canAccessTenantData(currentUser, tenantId)) {
+        throw {
+          code: 'FORBIDDEN',
+          message: 'You do not have access to this tenant.',
+        } satisfies ApiError;
+      }
+
+      return getOrganizationsByTenant(tenantId);
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
+  @Post('reports/:reportCode/launch')
   @HttpCode(200)
   async launchReport(
     @Param('reportCode') reportCode: string,

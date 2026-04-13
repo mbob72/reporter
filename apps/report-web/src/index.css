@@ -75,6 +75,16 @@ select {
   font-size: 14px;
 }
 
+.access-denied {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(198, 40, 40, 0.24);
+  background: rgba(253, 237, 237, 0.85);
+  color: #9f1239;
+  font-weight: 700;
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -92,6 +102,11 @@ select {
   border: 1px solid #cbb89c;
   border-radius: 12px;
   background: #fffdfa;
+}
+
+.readonly-input {
+  color: #52606d;
+  background: rgba(248, 244, 236, 0.95) !important;
 }
 
 .button {
