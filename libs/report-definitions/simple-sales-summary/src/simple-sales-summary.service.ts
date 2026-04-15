@@ -1,10 +1,24 @@
-import type { CurrentUser } from '@report-platform/contracts';
+import type { ApiError, CurrentUser } from '@report-platform/contracts';
 import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
+import { getOrganizationsByTenant } from '@report-platform/data-access';
 
 import type {
-  SimpleSalesSummaryParams,
   SimpleSalesSummaryResult,
 } from './simple-sales-summary.contract';
+
+function throwValidationError(message: string): never {
+  throw {
+    code: 'VALIDATION_ERROR',
+    message,
+  } satisfies ApiError;
+}
+
+function throwNotFound(message: string): never {
+  throw {
+    code: 'NOT_FOUND',
+    message,
+  } satisfies ApiError;
+}
 
 export class SimpleSalesSummaryService {
   constructor(
@@ -12,23 +26,32 @@ export class SimpleSalesSummaryService {
     private readonly salesRepository: SalesRepository,
   ) {}
 
-  async run(
-    currentUser: CurrentUser,
-    params: SimpleSalesSummaryParams,
-  ): Promise<SimpleSalesSummaryResult> {
+  async run(currentUser: CurrentUser): Promise<SimpleSalesSummaryResult> {
+    const tenantId = currentUser.tenantId;
+
+    if (!tenantId) {
+      throwValidationError('Simple Sales Summary requires a tenant-scoped user.');
+    }
+
+    const defaultOrganization = getOrganizationsByTenant(tenantId)[0];
+
+    if (!defaultOrganization) {
+      throwNotFound('Organization not found for current tenant.');
+    }
+
     const tenantName = await this.tenantRepository.getTenantName(
       currentUser,
-      params.tenant,
+      tenantId,
     );
     const organizationName = await this.tenantRepository.getOrganizationName(
       currentUser,
-      params.tenant,
-      params.organization,
+      tenantId,
+      defaultOrganization.id,
     );
     const currentSalesAmount = await this.salesRepository.getCurrentSalesAmount(
       currentUser,
-      params.tenant,
-      params.organization,
+      tenantId,
+      defaultOrganization.id,
     );
 
     return {

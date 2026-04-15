@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-export const SimpleSalesSummaryParamsSchema = z.object({
-  tenant: z.string().trim().min(1),
-  organization: z.string().trim().min(1),
-});
+export const SimpleSalesSummaryParamsSchema = z.object({});
 
 export const SimpleSalesSummaryResultSchema = z.object({
   tenantName: z.string().min(1),

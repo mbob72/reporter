@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import {
+  BROKER_PORTFOLIO_SUMMARY_REPORT_CODE,
+  BrokerPortfolioSummaryResultSchema,
+  type BrokerPortfolioSummaryResult,
+} from '@report-definitions/broker-portfolio-summary';
+import {
   SIMPLE_SALES_SUMMARY_REPORT_CODE,
   SimpleSalesSummaryResultSchema,
   type SimpleSalesSummaryResult,
@@ -8,11 +13,8 @@ import {
 import {
   getReportMetadata,
   launchReport,
-  listOrganizations,
   listReports,
-  listTenants,
-  type OrganizationOption,
-  type TenantOption,
+  listSharedSettings,
 } from '@report-platform/api-client';
 import {
   DEFAULT_MOCK_USER_ID,
@@ -22,10 +24,10 @@ import {
 } from '@report-platform/auth';
 import {
   ApiErrorSchema,
-  type ReportFieldMetadata,
   type ReportListItem,
   type ReportMetadata,
   type Role,
+  type SharedSettingOption,
 } from '@report-platform/contracts';
 
 type UiError = {
@@ -33,12 +35,17 @@ type UiError = {
   message: string;
 };
 
-type FieldValues = Record<string, string>;
+type UiStep = 'select' | 'launch';
+type CredentialMode = 'shared_setting' | 'manual';
 
 type UiResult =
   | {
       kind: 'simple-sales-summary';
       data: SimpleSalesSummaryResult;
+    }
+  | {
+      kind: 'broker-portfolio-summary';
+      data: BrokerPortfolioSummaryResult;
     }
   | {
       kind: 'generic';
@@ -56,22 +63,6 @@ function hasRoleAccess(currentRole: Role, minRole: Role): boolean {
   return roleRank[currentRole] >= roleRank[minRole];
 }
 
-function resolveUserContextValue(
-  field: ReportFieldMetadata,
-  tenantId: string | null,
-  organizationId: string | null,
-): string {
-  if (field.kind === 'tenant') {
-    return tenantId ?? '';
-  }
-
-  if (field.kind === 'organization') {
-    return organizationId ?? '';
-  }
-
-  return '';
-}
-
 function toUiError(caughtError: unknown): UiError {
   const parsedError = ApiErrorSchema.safeParse(caughtError);
 
@@ -80,6 +71,13 @@ function toUiError(caughtError: unknown): UiError {
   }
 
   if (caughtError instanceof Error) {
+    if (caughtError.message.includes('Failed to fetch')) {
+      return {
+        code: 'NETWORK_ERROR',
+        message: 'Сервер недоступен. Проверьте, что запущен start:api.',
+      };
+    }
+
     return {
       code: 'UNEXPECTED_ERROR',
       message: caughtError.message,
@@ -93,52 +91,32 @@ function toUiError(caughtError: unknown): UiError {
 }
 
 export function App() {
+  const [step, setStep] = useState<UiStep>('select');
   const [mockUserId, setMockUserId] = useState<MockUserId>(DEFAULT_MOCK_USER_ID);
   const [reports, setReports] = useState<ReportListItem[]>([]);
   const [selectedReportCode, setSelectedReportCode] = useState('');
   const [metadata, setMetadata] = useState<ReportMetadata | null>(null);
-  const [fieldValues, setFieldValues] = useState<FieldValues>({});
-  const [tenants, setTenants] = useState<TenantOption[]>([]);
-  const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [metadataLoading, setMetadataLoading] = useState(false);
-  const [optionsLoading, setOptionsLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const [result, setResult] = useState<UiResult | null>(null);
   const [error, setError] = useState<UiError | null>(null);
+
+  const [brokerAccountId, setBrokerAccountId] = useState('');
+  const [credentialMode, setCredentialMode] =
+    useState<CredentialMode>('manual');
+  const [sharedSettings, setSharedSettings] = useState<SharedSettingOption[]>([]);
+  const [sharedSettingsLoading, setSharedSettingsLoading] = useState(false);
+  const [selectedSharedSettingId, setSelectedSharedSettingId] = useState('');
+  const [manualUsername, setManualUsername] = useState('');
+  const [manualPassword, setManualPassword] = useState('');
 
   const currentUser = mockUsers[mockUserId];
 
   const selectedReport = useMemo(
-    () => reports.find((reportDefinition) => reportDefinition.code === selectedReportCode) ?? null,
+    () => reports.find((report) => report.code === selectedReportCode) ?? null,
     [reports, selectedReportCode],
   );
-
-  const tenantField = useMemo(
-    () => metadata?.fields.find((field) => field.kind === 'tenant') ?? null,
-    [metadata],
-  );
-
-  const organizationField = useMemo(
-    () => metadata?.fields.find((field) => field.kind === 'organization') ?? null,
-    [metadata],
-  );
-
-  const tenantValue = useMemo(() => {
-    if (!tenantField) {
-      return '';
-    }
-
-    if (tenantField.source === 'user-context') {
-      return resolveUserContextValue(
-        tenantField,
-        currentUser.tenantId,
-        currentUser.organizationId,
-      );
-    }
-
-    return fieldValues[tenantField.name] ?? '';
-  }, [currentUser.organizationId, currentUser.tenantId, fieldValues, tenantField]);
 
   const hasLaunchAccess = useMemo(() => {
     if (!metadata) {
@@ -147,6 +125,16 @@ export function App() {
 
     return hasRoleAccess(currentUser.role, metadata.minRoleToLaunch);
   }, [currentUser.role, metadata]);
+
+  const isBrokerReport = selectedReportCode === BROKER_PORTFOLIO_SUMMARY_REPORT_CODE;
+  const isSimpleReport = selectedReportCode === SIMPLE_SALES_SUMMARY_REPORT_CODE;
+
+  const isBrokerLaunchDisabled =
+    launching ||
+    !brokerAccountId.trim() ||
+    (credentialMode === 'shared_setting' && !selectedSharedSettingId) ||
+    (credentialMode === 'manual' &&
+      (!manualUsername.trim() || !manualPassword.trim()));
 
   useEffect(() => {
     if (window.location.pathname === '/') {
@@ -158,11 +146,9 @@ export function App() {
     let cancelled = false;
 
     setListLoading(true);
+    setReports([]);
+    setSelectedReportCode('');
     setMetadata(null);
-    setFieldValues({});
-    setTenants([]);
-    setOrganizations([]);
-    setResult(null);
     setError(null);
 
     listReports({ mockUserId })
@@ -172,24 +158,13 @@ export function App() {
         }
 
         setReports(reportList);
-        setSelectedReportCode((currentValue) => {
-          if (
-            currentValue &&
-            reportList.some((reportDefinition) => reportDefinition.code === currentValue)
-          ) {
-            return currentValue;
-          }
-
-          return reportList[0]?.code ?? '';
-        });
+        setSelectedReportCode(reportList[0]?.code ?? '');
       })
       .catch((caughtError) => {
         if (cancelled) {
           return;
         }
 
-        setReports([]);
-        setSelectedReportCode('');
         setError(toUiError(caughtError));
       })
       .finally(() => {
@@ -208,19 +183,11 @@ export function App() {
 
     if (!selectedReportCode) {
       setMetadata(null);
-      setFieldValues({});
-      setTenants([]);
-      setOrganizations([]);
       return;
     }
 
     setMetadataLoading(true);
     setMetadata(null);
-    setFieldValues({});
-    setTenants([]);
-    setOrganizations([]);
-    setResult(null);
-    setError(null);
 
     getReportMetadata(selectedReportCode, { mockUserId })
       .then((reportMetadata) => {
@@ -229,31 +196,12 @@ export function App() {
         }
 
         setMetadata(reportMetadata);
-        setFieldValues(() => {
-          const initialValues: FieldValues = {};
-
-          for (const field of reportMetadata.fields) {
-            if (field.source === 'user-context') {
-              initialValues[field.name] = resolveUserContextValue(
-                field,
-                currentUser.tenantId,
-                currentUser.organizationId,
-              );
-            } else {
-              initialValues[field.name] = '';
-            }
-          }
-
-          return initialValues;
-        });
       })
       .catch((caughtError) => {
         if (cancelled) {
           return;
         }
 
-        setMetadata(null);
-        setFieldValues({});
         setError(toUiError(caughtError));
       })
       .finally(() => {
@@ -265,69 +213,50 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser.organizationId, currentUser.tenantId, mockUserId, selectedReportCode]);
+  }, [mockUserId, selectedReportCode]);
+
+  useEffect(() => {
+    setStep('select');
+    setResult(null);
+    setError(null);
+    setBrokerAccountId('');
+    setCredentialMode('manual');
+    setSharedSettings([]);
+    setSharedSettingsLoading(false);
+    setSelectedSharedSettingId('');
+    setManualUsername('');
+    setManualPassword('');
+  }, [mockUserId, selectedReportCode]);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!metadata || !hasLaunchAccess) {
-      setTenants([]);
+    if (
+      step !== 'launch' ||
+      !isBrokerReport ||
+      credentialMode !== 'shared_setting'
+    ) {
       return;
     }
 
-    if (!tenantField) {
-      setTenants([]);
-      return;
-    }
+    setSharedSettingsLoading(true);
 
-    if (tenantField.source === 'user-context') {
-      const userContextTenant = resolveUserContextValue(
-        tenantField,
-        currentUser.tenantId,
-        currentUser.organizationId,
-      );
-      setTenants([]);
-      setFieldValues((currentValues) => {
-        if (currentValues[tenantField.name] === userContextTenant) {
-          return currentValues;
-        }
-
-        return {
-          ...currentValues,
-          [tenantField.name]: userContextTenant,
-        };
-      });
-      return;
-    }
-
-    if (tenantField.source !== 'select') {
-      return;
-    }
-
-    setOptionsLoading(true);
-
-    listTenants({ mockUserId })
-      .then((tenantOptions) => {
+    listSharedSettings(selectedReportCode, 'brokerApi', { mockUserId })
+      .then((sharedSettingOptions) => {
         if (cancelled) {
           return;
         }
 
-        setTenants(tenantOptions);
-        setFieldValues((currentValues) => {
-          const currentTenant = currentValues[tenantField.name] ?? '';
-          const fallbackTenant = tenantOptions[0]?.id ?? '';
-          const nextTenant = tenantOptions.some((option) => option.id === currentTenant)
-            ? currentTenant
-            : fallbackTenant;
-
-          if (nextTenant === currentTenant) {
-            return currentValues;
+        setSharedSettings(sharedSettingOptions);
+        setSelectedSharedSettingId((currentId) => {
+          if (
+            currentId &&
+            sharedSettingOptions.some((sharedSettingOption) => sharedSettingOption.id === currentId)
+          ) {
+            return currentId;
           }
 
-          return {
-            ...currentValues,
-            [tenantField.name]: nextTenant,
-          };
+          return sharedSettingOptions[0]?.id ?? '';
         });
       })
       .catch((caughtError) => {
@@ -335,141 +264,46 @@ export function App() {
           return;
         }
 
-        setTenants([]);
+        setSharedSettings([]);
+        setSelectedSharedSettingId('');
         setError(toUiError(caughtError));
       })
       .finally(() => {
         if (!cancelled) {
-          setOptionsLoading(false);
+          setSharedSettingsLoading(false);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    currentUser.organizationId,
-    currentUser.tenantId,
-    hasLaunchAccess,
-    metadata,
-    mockUserId,
-    tenantField,
-  ]);
+  }, [credentialMode, isBrokerReport, mockUserId, selectedReportCode, step]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!metadata || !hasLaunchAccess) {
-      setOrganizations([]);
-      return;
-    }
-
-    if (!organizationField) {
-      setOrganizations([]);
-      return;
-    }
-
-    if (organizationField.source === 'user-context') {
-      const userContextOrganization = resolveUserContextValue(
-        organizationField,
-        currentUser.tenantId,
-        currentUser.organizationId,
-      );
-      setOrganizations([]);
-      setFieldValues((currentValues) => {
-        if (currentValues[organizationField.name] === userContextOrganization) {
-          return currentValues;
-        }
-
-        return {
-          ...currentValues,
-          [organizationField.name]: userContextOrganization,
-        };
-      });
-      return;
-    }
-
-    if (organizationField.source !== 'select') {
-      return;
-    }
-
-    if (!tenantValue) {
-      setOrganizations([]);
-      setFieldValues((currentValues) => {
-        if (!currentValues[organizationField.name]) {
-          return currentValues;
-        }
-
-        return {
-          ...currentValues,
-          [organizationField.name]: '',
-        };
-      });
-      return;
-    }
-
-    setOptionsLoading(true);
-
-    listOrganizations(tenantValue, { mockUserId })
-      .then((organizationOptions) => {
-        if (cancelled) {
-          return;
-        }
-
-        setOrganizations(organizationOptions);
-        setFieldValues((currentValues) => {
-          const currentOrganization = currentValues[organizationField.name] ?? '';
-          const fallbackOrganization = organizationOptions[0]?.id ?? '';
-          const nextOrganization = organizationOptions.some(
-            (option) => option.id === currentOrganization,
-          )
-            ? currentOrganization
-            : fallbackOrganization;
-
-          if (nextOrganization === currentOrganization) {
-            return currentValues;
-          }
-
-          return {
-            ...currentValues,
-            [organizationField.name]: nextOrganization,
-          };
-        });
-      })
-      .catch((caughtError) => {
-        if (cancelled) {
-          return;
-        }
-
-        setOrganizations([]);
-        setError(toUiError(caughtError));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setOptionsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    currentUser.organizationId,
-    currentUser.tenantId,
-    hasLaunchAccess,
-    metadata,
-    mockUserId,
-    organizationField,
-    tenantValue,
-  ]);
-
-  const handleLaunch = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handleNextStep = () => {
     if (!selectedReportCode || !metadata) {
       setError({
         code: 'VALIDATION_ERROR',
-        message: 'Select a report before launching.',
+        message: 'Сначала выберите отчет.',
+      });
+      return;
+    }
+
+    setStep('launch');
+    setResult(null);
+    setError(null);
+  };
+
+  const handleBackStep = () => {
+    setStep('select');
+    setResult(null);
+    setError(null);
+  };
+
+  const handleLaunchSimpleReport = async () => {
+    if (!selectedReportCode || !metadata) {
+      setError({
+        code: 'VALIDATION_ERROR',
+        message: 'Сначала выберите отчет.',
       });
       return;
     }
@@ -482,120 +316,153 @@ export function App() {
       return;
     }
 
-    const params: Record<string, unknown> = {};
-
-    for (const field of metadata.fields) {
-      const value = (fieldValues[field.name] ?? '').trim();
-
-      if (field.required && !value) {
-        setError({
-          code: 'VALIDATION_ERROR',
-          message: `Поле "${field.label}" обязательно для заполнения.`,
-        });
-        return;
-      }
-
-      params[field.name] = value;
-    }
-
-    setLoading(true);
+    setLaunching(true);
     setResult(null);
     setError(null);
 
     try {
-      const reportPayload = await launchReport(selectedReportCode, params, {
-        mockUserId,
-      });
+      const reportPayload = await launchReport(selectedReportCode, {}, { mockUserId });
+      const parsedResult = SimpleSalesSummaryResultSchema.safeParse(reportPayload);
 
-      if (selectedReportCode === SIMPLE_SALES_SUMMARY_REPORT_CODE) {
-        const parsedSimpleResult = SimpleSalesSummaryResultSchema.safeParse(reportPayload);
-
-        if (!parsedSimpleResult.success) {
-          throw new Error('API returned an invalid success payload.');
-        }
-
-        setResult({
-          kind: 'simple-sales-summary',
-          data: parsedSimpleResult.data,
-        });
-      } else {
-        setResult({
-          kind: 'generic',
-          data: reportPayload,
-        });
+      if (!parsedResult.success) {
+        throw new Error('API returned an invalid success payload.');
       }
+
+      setResult({
+        kind: SIMPLE_SALES_SUMMARY_REPORT_CODE,
+        data: parsedResult.data,
+      });
     } catch (caughtError) {
       setError(toUiError(caughtError));
     } finally {
-      setLoading(false);
+      setLaunching(false);
     }
   };
 
-  const renderField = (field: ReportFieldMetadata) => {
-    const fieldValue = fieldValues[field.name] ?? '';
+  const handleLaunchBrokerReport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-    if (field.source === 'user-context') {
+    if (!selectedReportCode || !metadata) {
+      setError({
+        code: 'VALIDATION_ERROR',
+        message: 'Сначала выберите отчет.',
+      });
+      return;
+    }
+
+    if (!hasLaunchAccess) {
+      setError({
+        code: 'FORBIDDEN',
+        message: 'Нельзя сгенерировать отчет: недостаточно прав доступа.',
+      });
+      return;
+    }
+
+    if (isBrokerLaunchDisabled) {
+      setError({
+        code: 'VALIDATION_ERROR',
+        message: 'Заполните обязательные поля для запуска broker отчета.',
+      });
+      return;
+    }
+
+    const params = {
+      accountId: brokerAccountId.trim(),
+      credentials:
+        credentialMode === 'shared_setting'
+          ? {
+              mode: 'shared_setting' as const,
+              sharedSettingId: selectedSharedSettingId,
+            }
+          : {
+              mode: 'manual' as const,
+              username: manualUsername.trim(),
+              password: manualPassword,
+            },
+    };
+
+    setLaunching(true);
+    setResult(null);
+    setError(null);
+
+    try {
+      const reportPayload = await launchReport(selectedReportCode, params, { mockUserId });
+      const parsedResult = BrokerPortfolioSummaryResultSchema.safeParse(reportPayload);
+
+      if (!parsedResult.success) {
+        throw new Error('API returned an invalid success payload.');
+      }
+
+      setResult({
+        kind: BROKER_PORTFOLIO_SUMMARY_REPORT_CODE,
+        data: parsedResult.data,
+      });
+    } catch (caughtError) {
+      setError(toUiError(caughtError));
+    } finally {
+      setManualPassword('');
+      setLaunching(false);
+    }
+  };
+
+  const renderResult = () => {
+    if (!result) {
+      return null;
+    }
+
+    if (result.kind === SIMPLE_SALES_SUMMARY_REPORT_CODE) {
       return (
-        <label className="field" key={field.name}>
-          <span>{field.label}</span>
-          <input className="readonly-input" value={fieldValue} readOnly />
-        </label>
+        <section className="result-card">
+          <h2>Результат</h2>
+          <dl className="result-grid">
+            <div>
+              <dt>Tenant</dt>
+              <dd>{result.data.tenantName}</dd>
+            </div>
+            <div>
+              <dt>Organization</dt>
+              <dd>{result.data.organizationName}</dd>
+            </div>
+            <div>
+              <dt>Current sales</dt>
+              <dd>{result.data.currentSalesAmount.toLocaleString('en-US')}</dd>
+            </div>
+          </dl>
+        </section>
       );
     }
 
-    if (field.source === 'select') {
-      const options =
-        field.kind === 'tenant'
-          ? tenants.map((tenantOption) => ({
-              id: tenantOption.id,
-              label: tenantOption.name,
-            }))
-          : field.kind === 'organization'
-            ? organizations.map((organizationOption) => ({
-                id: organizationOption.id,
-                label: organizationOption.name,
-              }))
-            : [];
-
+    if (result.kind === BROKER_PORTFOLIO_SUMMARY_REPORT_CODE) {
       return (
-        <label className="field" key={field.name}>
-          <span>{field.label}</span>
-          <select
-            value={fieldValue}
-            disabled={optionsLoading || options.length === 0}
-            onChange={(event) =>
-              setFieldValues((currentValues) => ({
-                ...currentValues,
-                [field.name]: event.target.value,
-              }))
-            }
-          >
-            {options.length === 0 ? (
-              <option value="">Нет доступных опций</option>
-            ) : null}
-            {options.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <section className="result-card">
+          <h2>Результат</h2>
+          <dl className="result-grid">
+            <div>
+              <dt>Owner</dt>
+              <dd>{result.data.owner}</dd>
+            </div>
+            <div>
+              <dt>Account</dt>
+              <dd>{result.data.accountId}</dd>
+            </div>
+            <div>
+              <dt>Total market value</dt>
+              <dd>{result.data.totalMarketValue.toLocaleString('en-US')}</dd>
+            </div>
+            <div>
+              <dt>Trade count</dt>
+              <dd>{result.data.tradeCount}</dd>
+            </div>
+          </dl>
+        </section>
       );
     }
 
     return (
-      <label className="field" key={field.name}>
-        <span>{field.label}</span>
-        <input
-          value={fieldValue}
-          onChange={(event) =>
-            setFieldValues((currentValues) => ({
-              ...currentValues,
-              [field.name]: event.target.value,
-            }))
-          }
-        />
-      </label>
+      <section className="result-card">
+        <h2>Результат</h2>
+        <pre className="result-json">{JSON.stringify(result.data, null, 2) ?? 'null'}</pre>
+      </section>
     );
   };
 
@@ -606,105 +473,213 @@ export function App() {
           <p className="eyebrow">Reporting Prototype</p>
           <h1>Запуск отчета</h1>
           <p className="description">
-            Выбери mock пользователя и отчет, затем запусти его через metadata-driven форму.
+            Шаг 1: выбери пользователя и отчет. Шаг 2: запусти выбранный отчет.
           </p>
         </div>
 
-        <form className="form" onSubmit={handleLaunch}>
-          <label className="field">
-            <span>Mock пользователь</span>
-            <select
-              value={mockUserId}
-              onChange={(event) => setMockUserId(event.target.value as MockUserId)}
-            >
-              {mockUserOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="stepper-header">
+          <p className={step === 'select' ? 'step-item is-active' : 'step-item'}>
+            1. Выбор
+          </p>
+          <p className={step === 'launch' ? 'step-item is-active' : 'step-item'}>
+            2. Запуск
+          </p>
+        </div>
 
-          <label className="field">
-            <span>Отчет</span>
-            <select
-              value={selectedReportCode}
-              disabled={listLoading || reports.length === 0}
-              onChange={(event) => setSelectedReportCode(event.target.value)}
-            >
-              {reports.map((reportDefinition) => (
-                <option key={reportDefinition.code} value={reportDefinition.code}>
-                  {reportDefinition.title}
-                </option>
-              ))}
-            </select>
-          </label>
+        {step === 'select' ? (
+          <section>
+            <div className="form">
+              <label className="field">
+                <span>Mock пользователь</span>
+                <select
+                  value={mockUserId}
+                  onChange={(event) => setMockUserId(event.target.value as MockUserId)}
+                >
+                  {mockUserOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          {selectedReport ? (
-            <p className="report-description">{selectedReport.description}</p>
-          ) : null}
+              <label className="field">
+                <span>Отчет</span>
+                <select
+                  value={selectedReportCode}
+                  disabled={listLoading || reports.length === 0}
+                  onChange={(event) => setSelectedReportCode(event.target.value)}
+                >
+                  {reports.map((reportDefinition) => (
+                    <option key={reportDefinition.code} value={reportDefinition.code}>
+                      {reportDefinition.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          {metadata && !hasLaunchAccess ? (
-            <p className="access-denied">
-              Нельзя сгенерировать отчет: недостаточно прав доступа.
-            </p>
-          ) : null}
+              {selectedReport ? (
+                <p className="report-description">{selectedReport.description}</p>
+              ) : null}
 
-          {metadata && hasLaunchAccess ? metadata.fields.map((field) => renderField(field)) : null}
+              <button
+                className="button"
+                type="button"
+                disabled={listLoading || metadataLoading || !selectedReportCode || !metadata}
+                onClick={handleNextStep}
+              >
+                Далее
+              </button>
+            </div>
+          </section>
+        ) : null}
 
-          <button
-            className="button"
-            type="submit"
-            disabled={
-              loading ||
-              listLoading ||
-              metadataLoading ||
-              optionsLoading ||
-              !selectedReportCode ||
-              !metadata ||
-              !hasLaunchAccess
-            }
-          >
-            {loading ? 'Запуск...' : 'Запустить отчет'}
-          </button>
-        </form>
+        {step === 'launch' && isSimpleReport ? (
+          <section className="step-launch-block">
+            <h2>{selectedReport?.title ?? 'Simple Sales Summary'}</h2>
+
+            {metadata && !hasLaunchAccess ? (
+              <p className="access-denied">
+                Нельзя сгенерировать отчет: недостаточно прав доступа.
+              </p>
+            ) : null}
+
+            <div className="button-row">
+              <button className="button button-secondary" type="button" onClick={handleBackStep}>
+                Назад
+              </button>
+              <button
+                className="button"
+                type="button"
+                disabled={launching || !hasLaunchAccess}
+                onClick={handleLaunchSimpleReport}
+              >
+                {launching ? 'Запуск...' : 'Запустить'}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 'launch' && isBrokerReport ? (
+          <section className="step-launch-block">
+            <h2>{selectedReport?.title ?? 'Broker Portfolio Summary'}</h2>
+
+            {metadata && !hasLaunchAccess ? (
+              <p className="access-denied">
+                Нельзя сгенерировать отчет: недостаточно прав доступа.
+              </p>
+            ) : null}
+
+            <form className="form" onSubmit={handleLaunchBrokerReport}>
+              <label className="field">
+                <span>Account ID</span>
+                <input
+                  value={brokerAccountId}
+                  onChange={(event) => setBrokerAccountId(event.target.value)}
+                  placeholder="Например, ACC-001"
+                />
+              </label>
+
+              <div className="credentials-block">
+                <p className="credentials-title">
+                  Введите / выберите креды для сервиса brokerApi
+                </p>
+
+                <div className="mode-switch">
+                  <label>
+                    <input
+                      type="radio"
+                      name="credential-mode"
+                      value="shared_setting"
+                      checked={credentialMode === 'shared_setting'}
+                      onChange={() => setCredentialMode('shared_setting')}
+                    />
+                    Use shared settings
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="credential-mode"
+                      value="manual"
+                      checked={credentialMode === 'manual'}
+                      onChange={() => setCredentialMode('manual')}
+                    />
+                    Enter manually
+                  </label>
+                </div>
+
+                {credentialMode === 'shared_setting' ? (
+                  <div className="shared-settings-box">
+                    {sharedSettingsLoading ? (
+                      <p className="status-text">Загружаем shared settings...</p>
+                    ) : null}
+
+                    {!sharedSettingsLoading && sharedSettings.length === 0 ? (
+                      <p className="status-text">
+                        Нет доступных shared settings для этого пользователя и репорта.
+                      </p>
+                    ) : null}
+
+                    {!sharedSettingsLoading && sharedSettings.length > 0 ? (
+                      <label className="field">
+                        <span>Shared setting</span>
+                        <select
+                          value={selectedSharedSettingId}
+                          onChange={(event) =>
+                            setSelectedSharedSettingId(event.target.value)
+                          }
+                        >
+                          {sharedSettings.map((setting) => (
+                            <option key={setting.id} value={setting.id}>
+                              {setting.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="manual-credentials-grid">
+                    <label className="field">
+                      <span>Username</span>
+                      <input
+                        value={manualUsername}
+                        onChange={(event) => setManualUsername(event.target.value)}
+                      />
+                    </label>
+
+                    <label className="field">
+                      <span>Password</span>
+                      <input
+                        type="password"
+                        value={manualPassword}
+                        onChange={(event) => setManualPassword(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="button-row">
+                <button className="button button-secondary" type="button" onClick={handleBackStep}>
+                  Назад
+                </button>
+                <button
+                  className="button"
+                  type="submit"
+                  disabled={!hasLaunchAccess || isBrokerLaunchDisabled}
+                >
+                  {launching ? 'Запуск...' : 'Запустить'}
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
 
         {listLoading ? <p className="status-text">Загружаем список отчетов...</p> : null}
-
         {metadataLoading ? <p className="status-text">Загружаем metadata отчета...</p> : null}
 
-        {optionsLoading ? <p className="status-text">Загружаем опции полей...</p> : null}
-
-        {!listLoading && reports.length === 0 ? (
-          <p className="status-text">Нет доступных отчетов.</p>
-        ) : null}
-
-        {result?.kind === 'simple-sales-summary' ? (
-          <section className="result-card">
-            <h2>Результат</h2>
-            <dl className="result-grid">
-              <div>
-                <dt>Tenant</dt>
-                <dd>{result.data.tenantName}</dd>
-              </div>
-              <div>
-                <dt>Organization</dt>
-                <dd>{result.data.organizationName}</dd>
-              </div>
-              <div>
-                <dt>Current sales</dt>
-                <dd>{result.data.currentSalesAmount.toLocaleString('en-US')}</dd>
-              </div>
-            </dl>
-          </section>
-        ) : null}
-
-        {result?.kind === 'generic' ? (
-          <section className="result-card">
-            <h2>Результат</h2>
-            <pre className="result-json">{JSON.stringify(result.data, null, 2) ?? 'null'}</pre>
-          </section>
-        ) : null}
+        {renderResult()}
 
         {error ? (
           <section className="error-card">

@@ -50,6 +50,28 @@ select {
   margin-bottom: 24px;
 }
 
+.stepper-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.step-item {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(117, 87, 38, 0.2);
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.step-item.is-active {
+  color: #8d5c11;
+  background: rgba(233, 196, 106, 0.2);
+  border-color: rgba(141, 92, 17, 0.35);
+  font-weight: 700;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   text-transform: uppercase;
@@ -104,6 +126,25 @@ select {
   background: #fffdfa;
 }
 
+.field select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 40px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8d5c11 50%),
+    linear-gradient(135deg, #8d5c11 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% + 1px),
+    calc(100% - 12px) calc(50% + 1px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.step-launch-block h2 {
+  margin: 0 0 14px;
+}
+
 .readonly-input {
   color: #52606d;
   background: rgba(248, 244, 236, 0.95) !important;
@@ -121,6 +162,64 @@ select {
 .button:disabled {
   cursor: progress;
   opacity: 0.72;
+}
+
+.button-secondary {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+}
+
+.credentials-block {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(117, 87, 38, 0.2);
+  background: rgba(255, 252, 247, 0.75);
+}
+
+.credentials-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.mode-switch {
+  display: grid;
+  gap: 8px;
+}
+
+.mode-switch label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(117, 87, 38, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 252, 247, 0.85);
+}
+
+.mode-switch input[type='radio'] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.shared-settings-box {
+  display: grid;
+  gap: 8px;
+}
+
+.shared-settings-box .status-text {
+  margin: 0;
+}
+
+.manual-credentials-grid {
+  display: grid;
+  gap: 12px;
 }
 
 .result-card,
@@ -177,5 +276,9 @@ select {
 @media (max-width: 640px) {
   .panel {
     padding: 22px;
+  }
+
+  .button-row {
+    flex-direction: column;
   }
 }

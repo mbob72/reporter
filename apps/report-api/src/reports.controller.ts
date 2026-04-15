@@ -11,13 +11,14 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
 
 import {
   canAccessTenantData,
   getCurrentUser,
   MOCK_USER_HEADER,
 } from '@report-platform/auth';
+import type { SharedSettingsProvider } from '@report-platform/external-api';
+import { SHARED_SETTINGS_PROVIDER_TOKEN } from '@report-platform/external-api';
 import {
   getAllTenants,
   getOrganizationsByTenant,
@@ -27,11 +28,28 @@ import {
   LaunchReportBodySchema,
   ReportMetadataSchema,
   ReportListResponseSchema,
+  SharedSettingOptionListSchema,
+  type Role,
 } from '@report-platform/contracts';
 import type { ApiError } from '@report-platform/contracts';
 import { ReportRegistry } from '@report-platform/registry';
 
 import { REPORT_REGISTRY_TOKEN } from './reporting.providers';
+
+type RequestWithHeaders = {
+  headers: Record<string, string | string[] | undefined>;
+};
+
+const roleRank: Record<Role, number> = {
+  Auditor: 0,
+  Member: 1,
+  TenantAdmin: 2,
+  Admin: 3,
+};
+
+function hasRoleAccess(currentRole: Role, minRole: Role): boolean {
+  return roleRank[currentRole] >= roleRank[minRole];
+}
 
 function toHttpException(error: unknown): HttpException {
   const parsedError = ApiErrorSchema.safeParse(error);
@@ -60,11 +78,13 @@ export class ReportsController {
   constructor(
     @Inject(REPORT_REGISTRY_TOKEN)
     private readonly reportRegistry: ReportRegistry,
+    @Inject(SHARED_SETTINGS_PROVIDER_TOKEN)
+    private readonly sharedSettingsProvider: SharedSettingsProvider,
   ) {}
 
   @Get('reports')
   @HttpCode(200)
-  async listReports(@Req() req: Request) {
+  async listReports(@Req() req: RequestWithHeaders) {
     try {
       const currentUser = getCurrentUser(req.headers);
       const reportList = this.reportRegistry.listReports();
@@ -88,7 +108,7 @@ export class ReportsController {
   @HttpCode(200)
   async getReportMetadata(
     @Param('code') reportCode: string,
-    @Req() req: Request,
+    @Req() req: RequestWithHeaders,
   ) {
     try {
       const currentUser = getCurrentUser(req.headers);
@@ -113,9 +133,58 @@ export class ReportsController {
     }
   }
 
+  @Get('reports/:reportCode/external-services/:serviceKey/shared-settings')
+  @HttpCode(200)
+  async listSharedSettings(
+    @Param('reportCode') reportCode: string,
+    @Param('serviceKey') serviceKey: string,
+    @Req() req: RequestWithHeaders,
+  ) {
+    try {
+      const currentUser = getCurrentUser(req.headers);
+      const reportDefinition = this.reportRegistry.getReport(reportCode);
+
+      if (!reportDefinition) {
+        throw {
+          code: 'NOT_FOUND',
+          message: `Unknown report: ${reportCode}`,
+        } satisfies ApiError;
+      }
+
+      const reportMetadata = reportDefinition.getMetadata(currentUser);
+      const requiresService = reportMetadata.externalDependencies.some(
+        (dependency) => dependency.serviceKey === serviceKey,
+      );
+
+      if (!requiresService) {
+        throw {
+          code: 'VALIDATION_ERROR',
+          message: `Report does not declare external service: ${serviceKey}`,
+        } satisfies ApiError;
+      }
+
+      const sharedSettingOptions = await this.sharedSettingsProvider.listOptions({
+        currentUser,
+        reportCode,
+        serviceKey,
+      });
+      const parsedResponse = SharedSettingOptionListSchema.safeParse(
+        sharedSettingOptions,
+      );
+
+      if (!parsedResponse.success) {
+        throw new Error('Invalid shared settings response.');
+      }
+
+      return parsedResponse.data;
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
   @Get('tenants')
   @HttpCode(200)
-  async listTenants(@Req() req: Request) {
+  async listTenants(@Req() req: RequestWithHeaders) {
     try {
       const currentUser = getCurrentUser(req.headers);
       const allTenants = getAllTenants();
@@ -138,7 +207,7 @@ export class ReportsController {
   @HttpCode(200)
   async listOrganizationsByTenant(
     @Param('tenantId') tenantId: string,
-    @Req() req: Request,
+    @Req() req: RequestWithHeaders,
   ) {
     try {
       const currentUser = getCurrentUser(req.headers);
@@ -161,7 +230,7 @@ export class ReportsController {
   async launchReport(
     @Param('reportCode') reportCode: string,
     @Body() body: unknown,
-    @Req() req: Request,
+    @Req() req: RequestWithHeaders,
   ) {
     const parsedBody = LaunchReportBodySchema.safeParse(body);
 
@@ -189,6 +258,14 @@ export class ReportsController {
 
     try {
       const currentUser = getCurrentUser(req.headers);
+      const reportMetadata = reportDefinition.getMetadata(currentUser);
+
+      if (!hasRoleAccess(currentUser.role, reportMetadata.minRoleToLaunch)) {
+        throw {
+          code: 'FORBIDDEN',
+          message: 'You do not have access to launch this report.',
+        } satisfies ApiError;
+      }
 
       this.logger.log(
         `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,

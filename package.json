@@ -5,7 +5,8 @@
   "packageManager": "pnpm@7.33.7",
   "scripts": {
     "start:api": "tsx watch --tsconfig apps/report-api/tsconfig.json apps/report-api/src/main.ts",
-    "start:web": "vite --config apps/report-web/vite.config.ts"
+    "start:web": "vite --config apps/report-web/vite.config.ts",
+    "star:web": "vite --config apps/report-web/vite.config.ts"
   },
   "keywords": [],
   "author": "",

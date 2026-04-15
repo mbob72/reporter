@@ -46,25 +46,11 @@ export function createSimpleSalesSummaryDefinition(
     code: baseMetadata.code,
     title: baseMetadata.title,
     description: baseMetadata.description,
-    getMetadata(currentUser: CurrentUser): ReportMetadata {
+    getMetadata(_currentUser: CurrentUser): ReportMetadata {
       return {
         ...baseMetadata,
-        fields: [
-          {
-            name: 'tenant',
-            label: 'Tenant',
-            kind: 'tenant',
-            required: true,
-            source: currentUser.role === 'Admin' ? 'select' : 'user-context',
-          },
-          {
-            name: 'organization',
-            label: 'Organization',
-            kind: 'organization',
-            required: true,
-            source: 'select',
-          },
-        ],
+        fields: [],
+        externalDependencies: [],
       };
     },
     async launch(
@@ -77,7 +63,7 @@ export function createSimpleSalesSummaryDefinition(
         throwValidationError();
       }
 
-      const reportResult = await service.run(currentUser, parsedParams.data);
+      const reportResult = await service.run(currentUser);
       const parsedResult = SimpleSalesSummaryResultSchema.safeParse(reportResult);
 
       if (!parsedResult.success) {

@@ -13,15 +13,25 @@ export const ReportFieldMetadataSchema = z.object({
   source: ReportFieldSourceSchema,
 });
 
+export const ReportExternalDependencySchema = z.object({
+  serviceKey: z.string().trim().min(1),
+  authMode: z.enum(['shared_secret']),
+  minRoleToUse: RoleSchema,
+});
+
 export const ReportMetadataSchema = z.object({
   code: z.string().trim().min(1),
   title: z.string().trim().min(1),
   description: z.string().trim().min(1),
   minRoleToLaunch: RoleSchema,
   fields: z.array(ReportFieldMetadataSchema),
+  externalDependencies: z.array(ReportExternalDependencySchema).default([]),
 });
 
 export type ReportFieldKind = z.infer<typeof ReportFieldKindSchema>;
 export type ReportFieldSource = z.infer<typeof ReportFieldSourceSchema>;
 export type ReportFieldMetadata = z.infer<typeof ReportFieldMetadataSchema>;
+export type ReportExternalDependency = z.infer<
+  typeof ReportExternalDependencySchema
+>;
 export type ReportMetadata = z.infer<typeof ReportMetadataSchema>;

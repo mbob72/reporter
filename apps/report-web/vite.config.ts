@@ -16,12 +16,24 @@ export default defineConfig({
       '@report-platform/auth': fileURLToPath(
         new URL('../../libs/report-platform/auth/src/index.ts', import.meta.url),
       ),
+      '@report-platform/data-access': fileURLToPath(
+        new URL('../../libs/report-platform/data-access/src/index.ts', import.meta.url),
+      ),
       '@report-platform/api-client': fileURLToPath(
         new URL('../../libs/report-platform/api-client/src/index.ts', import.meta.url),
+      ),
+      '@report-platform/external-api': fileURLToPath(
+        new URL('../../libs/report-platform/external-api/src/index.ts', import.meta.url),
       ),
       '@report-definitions/simple-sales-summary': fileURLToPath(
         new URL(
           '../../libs/report-definitions/simple-sales-summary/src/index.ts',
+          import.meta.url,
+        ),
+      ),
+      '@report-definitions/broker-portfolio-summary': fileURLToPath(
+        new URL(
+          '../../libs/report-definitions/broker-portfolio-summary/src/index.ts',
           import.meta.url,
         ),
       ),
