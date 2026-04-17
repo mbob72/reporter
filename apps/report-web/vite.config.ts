@@ -31,6 +31,12 @@ export default defineConfig({
           import.meta.url,
         ),
       ),
+      '@report-definitions/simple-sales-summary-xlsx': fileURLToPath(
+        new URL(
+          '../../libs/report-definitions/simple-sales-summary-xlsx/src/index.ts',
+          import.meta.url,
+        ),
+      ),
       '@report-definitions/broker-portfolio-summary': fileURLToPath(
         new URL(
           '../../libs/report-definitions/broker-portfolio-summary/src/index.ts',
@@ -47,6 +53,9 @@ export default defineConfig({
         target: 'http://127.0.0.1:3000',
       },
       '/tenants': {
+        target: 'http://127.0.0.1:3000',
+      },
+      '/generated-files': {
         target: 'http://127.0.0.1:3000',
       },
     },

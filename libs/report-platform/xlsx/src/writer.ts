@@ -1,4 +1,4 @@
-import { MockXlsxBinaryWriter } from './mock-xlsx-binary-writer';
+import { mockXlsxWriter } from './mock-xlsx-binary-writer';
 import { WorkbookSchema, type WorkbookModel } from './model';
 
 export const XLSX_MIME_TYPE =
@@ -22,7 +22,7 @@ function getFileName(model: WorkbookModel): string {
 
 export async function makeXlsxFile(
   model: unknown,
-  writer: XlsxBinaryWriter = new MockXlsxBinaryWriter(),
+  writer: XlsxBinaryWriter = mockXlsxWriter,
 ): Promise<BuiltFile> {
   const parsedModel = WorkbookSchema.parse(model);
   const bytes = await Promise.resolve(writer.write(parsedModel));

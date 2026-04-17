@@ -10,6 +10,7 @@ import {
   Param,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
 
 import {
@@ -20,11 +21,16 @@ import {
 import type { SharedSettingsProvider } from '@report-platform/external-api';
 import { SHARED_SETTINGS_PROVIDER_TOKEN } from '@report-platform/external-api';
 import {
+  GENERATED_FILE_STORE_TOKEN,
+  type GeneratedFileStore,
+} from '@report-platform/file-store';
+import {
   getAllTenants,
   getOrganizationsByTenant,
 } from '@report-platform/data-access';
 import {
   ApiErrorSchema,
+  DownloadableFileResultSchema,
   LaunchReportBodySchema,
   ReportMetadataSchema,
   ReportListResponseSchema,
@@ -33,6 +39,7 @@ import {
 } from '@report-platform/contracts';
 import type { ApiError } from '@report-platform/contracts';
 import { ReportRegistry } from '@report-platform/registry';
+import type { BuiltFile } from '@report-platform/xlsx';
 
 import { REPORT_REGISTRY_TOKEN } from './reporting.providers';
 
@@ -49,6 +56,20 @@ const roleRank: Record<Role, number> = {
 
 function hasRoleAccess(currentRole: Role, minRole: Role): boolean {
   return roleRank[currentRole] >= roleRank[minRole];
+}
+
+function isBuiltFile(value: unknown): value is BuiltFile {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<BuiltFile>;
+
+  return (
+    typeof candidate.fileName === 'string' &&
+    typeof candidate.mimeType === 'string' &&
+    candidate.bytes instanceof Uint8Array
+  );
 }
 
 function toHttpException(error: unknown): HttpException {
@@ -80,6 +101,8 @@ export class ReportsController {
     private readonly reportRegistry: ReportRegistry,
     @Inject(SHARED_SETTINGS_PROVIDER_TOKEN)
     private readonly sharedSettingsProvider: SharedSettingsProvider,
+    @Inject(GENERATED_FILE_STORE_TOKEN)
+    private readonly generatedFileStore: GeneratedFileStore,
   ) {}
 
   @Get('reports')
@@ -271,7 +294,63 @@ export class ReportsController {
         `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
       );
 
-      return await reportDefinition.launch(currentUser, parsedBody.data.params);
+      const reportResult = await reportDefinition.launch(
+        currentUser,
+        parsedBody.data.params,
+      );
+
+      if (isBuiltFile(reportResult)) {
+        const { fileId } = await this.generatedFileStore.save({
+          fileName: reportResult.fileName,
+          mimeType: reportResult.mimeType,
+          bytes: reportResult.bytes,
+        });
+        const downloadableResult = {
+          kind: 'downloadable-file',
+          fileName: reportResult.fileName,
+          mimeType: reportResult.mimeType,
+          byteLength: reportResult.bytes.byteLength,
+          downloadUrl: `/generated-files/${fileId}`,
+        };
+        const parsedDownloadableResult =
+          DownloadableFileResultSchema.safeParse(downloadableResult);
+
+        if (!parsedDownloadableResult.success) {
+          throw new Error('Invalid downloadable file result.');
+        }
+
+        return parsedDownloadableResult.data;
+      }
+
+      return reportResult;
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
+  @Get('generated-files/:fileId')
+  @HttpCode(200)
+  async downloadGeneratedFile(
+    @Param('fileId') fileId: string,
+    @Res() res: any,
+  ) {
+    try {
+      const storedFile = await this.generatedFileStore.get(fileId);
+
+      if (!storedFile) {
+        throw {
+          code: 'NOT_FOUND',
+          message: 'Generated file not found.',
+        } satisfies ApiError;
+      }
+
+      res.setHeader('Content-Type', storedFile.mimeType);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${storedFile.fileName}"`,
+      );
+      res.setHeader('Content-Length', String(storedFile.bytes.byteLength));
+      res.send(Buffer.from(storedFile.bytes));
     } catch (error) {
       throw toHttpException(error);
     }

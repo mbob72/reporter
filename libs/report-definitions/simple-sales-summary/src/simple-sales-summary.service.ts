@@ -3,8 +3,10 @@ import type { SalesRepository, TenantRepository } from '@report-platform/data-ac
 import { getOrganizationsByTenant } from '@report-platform/data-access';
 
 import type {
+  SimpleSalesSummarySource,
   SimpleSalesSummaryResult,
 } from './simple-sales-summary.contract';
+import { SimpleSalesSummarySourceSchema } from './simple-sales-summary.contract';
 
 function throwValidationError(message: string): never {
   throw {
@@ -26,7 +28,7 @@ export class SimpleSalesSummaryService {
     private readonly salesRepository: SalesRepository,
   ) {}
 
-  async run(currentUser: CurrentUser): Promise<SimpleSalesSummaryResult> {
+  async getSource(currentUser: CurrentUser): Promise<SimpleSalesSummarySource> {
     const tenantId = currentUser.tenantId;
 
     if (!tenantId) {
@@ -54,10 +56,23 @@ export class SimpleSalesSummaryService {
       defaultOrganization.id,
     );
 
-    return {
+    return SimpleSalesSummarySourceSchema.parse({
+      tenantId,
+      organizationId: defaultOrganization.id,
       tenantName,
       organizationName,
       currentSalesAmount,
+      currency: 'USD',
+    });
+  }
+
+  async run(currentUser: CurrentUser): Promise<SimpleSalesSummaryResult> {
+    const source = await this.getSource(currentUser);
+
+    return {
+      tenantName: source.tenantName,
+      organizationName: source.organizationName,
+      currentSalesAmount: source.currentSalesAmount,
     };
   }
 }

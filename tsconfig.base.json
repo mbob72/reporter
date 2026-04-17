@@ -16,11 +16,15 @@
       "@report-platform/auth": ["libs/report-platform/auth/src/index.ts"],
       "@report-platform/data-access": ["libs/report-platform/data-access/src/index.ts"],
       "@report-platform/xlsx": ["libs/report-platform/xlsx/src/index.ts"],
+      "@report-platform/file-store": ["libs/report-platform/file-store/src/index.ts"],
       "@report-platform/registry": ["libs/report-platform/registry/src/index.ts"],
       "@report-platform/api-client": ["libs/report-platform/api-client/src/index.ts"],
       "@report-platform/external-api": ["libs/report-platform/external-api/src/index.ts"],
       "@report-definitions/simple-sales-summary": [
         "libs/report-definitions/simple-sales-summary/src/index.ts"
+      ],
+      "@report-definitions/simple-sales-summary-xlsx": [
+        "libs/report-definitions/simple-sales-summary-xlsx/src/index.ts"
       ],
       "@report-definitions/broker-portfolio-summary": [
         "libs/report-definitions/broker-portfolio-summary/src/index.ts"
