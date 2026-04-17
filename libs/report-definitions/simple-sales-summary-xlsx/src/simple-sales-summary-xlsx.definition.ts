@@ -1,32 +1,49 @@
+import { resolve } from 'node:path';
+
 import type {
   ApiError,
   CurrentUser,
   ReportMetadata,
 } from '@report-platform/contracts';
-import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
+import type {
+  ChannelsRepository,
+  ProductsRepository,
+} from '@report-platform/data-access';
 import type { ReportDefinition } from '@report-platform/registry';
-import {
-  makeXlsxFile,
-  mockXlsxWriter,
-  type BuiltFile,
-  type XlsxBinaryWriter,
-} from '@report-platform/xlsx';
+import { fillTemplateWorkbook, type BuiltFile } from '@report-platform/xlsx';
 
-import { SimpleSalesSummaryService } from '@report-definitions/simple-sales-summary';
-
-import { buildSimpleSalesSummaryWorkbook } from './simple-sales-summary-xlsx.builder';
+import { SimpleSalesSummaryXlsxParamsSchema } from './simple-sales-summary-xlsx.contract';
 import {
-  SimpleSalesSummaryXlsxParamsSchema,
-  SimpleSalesSummaryXlsxWorkbookMetadataSchema,
-  type SimpleSalesSummaryXlsxInternalResult,
-} from './simple-sales-summary-xlsx.contract';
+  type SimpleSalesSummaryXlsxDatasetRotation,
+  SimpleSalesSummaryXlsxSourceService,
+} from './simple-sales-summary-xlsx.source';
+import {
+  fillChannelsSheet,
+  fillCrossJoinSheet,
+  fillProductsSheet,
+  readCrossJoinRows,
+} from './simple-sales-summary-xlsx.template';
 
 export const SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE = 'simple-sales-summary-xlsx';
 
+const TEMPLATE_PATH =
+  'libs/report-definitions/simple-sales-summary-xlsx/template-assets/pelmeni-cross-join-template.xlsx';
+
+const reportMetadata: ReportMetadata = {
+  code: SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
+  title: 'Pelmeni Product × Channel Matrix XLSX',
+  description:
+    'Template-based XLSX report built from products and channel scenarios with recalculated formulas.',
+  minRoleToLaunch: 'TenantAdmin',
+  fields: [],
+  externalDependencies: [],
+};
+
 type CreateSimpleSalesSummaryXlsxDefinitionOptions = {
-  tenantRepository: TenantRepository;
-  salesRepository: SalesRepository;
-  xlsxWriter?: XlsxBinaryWriter;
+  productsRepository: ProductsRepository;
+  channelsRepository: ChannelsRepository;
+  datasetRotation: SimpleSalesSummaryXlsxDatasetRotation;
+  templatePath?: string;
 };
 
 function throwValidationError(message: string): never {
@@ -36,21 +53,13 @@ function throwValidationError(message: string): never {
   } satisfies ApiError;
 }
 
-const reportMetadata: ReportMetadata = {
-  code: SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
-  title: 'Simple Sales Summary XLSX',
-  description: 'Builds a workbook and returns a downloadable file artifact.',
-  minRoleToLaunch: 'TenantAdmin',
-  fields: [],
-  externalDependencies: [],
-};
-
 export function createSimpleSalesSummaryXlsxDefinition(
   options: CreateSimpleSalesSummaryXlsxDefinitionOptions,
 ): ReportDefinition<BuiltFile> {
-  const service = new SimpleSalesSummaryService(
-    options.tenantRepository,
-    options.salesRepository,
+  const sourceService = new SimpleSalesSummaryXlsxSourceService(
+    options.productsRepository,
+    options.channelsRepository,
+    options.datasetRotation,
   );
 
   return {
@@ -67,26 +76,46 @@ export function createSimpleSalesSummaryXlsxDefinition(
         throwValidationError('Invalid report params.');
       }
 
-      const source = await service.getSource(currentUser);
-      const { workbookMetadata, workbookModel } =
-        buildSimpleSalesSummaryWorkbook(source);
-      const parsedWorkbookMetadata =
-        SimpleSalesSummaryXlsxWorkbookMetadataSchema.safeParse(workbookMetadata);
+      const source = await sourceService.getSource(currentUser);
+      const templatePath = resolve(options.templatePath ?? TEMPLATE_PATH);
+      const outputFileName = `sales-channel-matrix-${source.datasetKey}.xlsx`;
 
-      if (!parsedWorkbookMetadata.success) {
-        throw new Error('Invalid workbook metadata.');
+      let builtFile: BuiltFile;
+
+      try {
+        const result = await fillTemplateWorkbook({
+          templatePath,
+          outputFileName,
+          fillWorkbook(workbook) {
+            fillProductsSheet(workbook, source.products);
+            fillChannelsSheet(workbook, source.channels);
+            fillCrossJoinSheet(workbook);
+          },
+          readCalculated(workbook) {
+            return readCrossJoinRows(
+              workbook,
+              source.products.length * source.channels.length,
+            );
+          },
+        });
+
+        builtFile = result.builtFile;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          (error.message.startsWith('XLSX template file not found:') ||
+            error.message.startsWith('LibreOffice executable not found.') ||
+            error.message.startsWith('Failed to read XLSX template file:') ||
+            error.message.startsWith('Failed to open recalculated XLSX file:') ||
+            error.message.startsWith('LibreOffice recalculation failed'))
+        ) {
+          throwValidationError(error.message);
+        }
+
+        throw error;
       }
 
-      const builtFile = await makeXlsxFile(
-        workbookModel,
-        options.xlsxWriter ?? mockXlsxWriter,
-      );
-      const internalResult: SimpleSalesSummaryXlsxInternalResult = {
-        workbookMetadata: parsedWorkbookMetadata.data,
-        builtFile,
-      };
-
-      return internalResult.builtFile;
+      return builtFile;
     },
   };
 }
