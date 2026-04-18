@@ -110,6 +110,8 @@ Implementation pattern:
 
 ## 5.1. External Dependency Resilience Design
 
+See also: `docs/external-dependency-resilience.md` for a full decision guide and examples.
+
 For each external dependency, define in report/service code:
 
 - is it `critical` or `optional`?

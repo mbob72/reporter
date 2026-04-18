@@ -168,6 +168,7 @@ Flow:
 ## External Dependency Resilience
 
 External dependency calls should be resilient and business-explicit.
+For an implementation-focused guide, see `docs/external-dependency-resilience.md`.
 
 ### Criticality
 
