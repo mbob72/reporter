@@ -22,8 +22,15 @@ export class SimpleSalesSummaryService {
     private readonly templatePath = TEMPLATE_PATH,
   ) {}
 
-  async run(currentUser: CurrentUser): Promise<BuiltFile> {
+  async run(
+    currentUser: CurrentUser,
+    options?: {
+      onSourceLoaded?: () => void;
+      onRecalculated?: () => void;
+    },
+  ): Promise<BuiltFile> {
     const source = await this.sourceService.getSource(currentUser);
+    options?.onSourceLoaded?.();
     // Weather fallback policy is resolved in source service; template fill is deterministic here.
     const outputFileName = `simple-sales-summary-${source.tenantId}-${source.organizationId}.xlsx`;
 
@@ -35,6 +42,7 @@ export class SimpleSalesSummaryService {
           fillSummarySheet(workbook, source);
         },
       });
+      options?.onRecalculated?.();
 
       return builtFile;
     } catch (error) {

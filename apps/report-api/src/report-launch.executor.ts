@@ -37,10 +37,17 @@ export async function executeReportLaunchInWorker(
 
   args.onProgress({
     stage: 'generating',
-    progressPercent: 70,
+    progressPercent: 30,
   });
 
-  const reportResult = await reportDefinition.launch(args.currentUser, args.params);
+  const reportResult = await reportDefinition.launch(args.currentUser, args.params, {
+    onProgress(progressPercent) {
+      args.onProgress({
+        stage: 'generating',
+        progressPercent,
+      });
+    },
+  });
 
   if (!isBuiltFile(reportResult)) {
     throw new Error('Current async prototype supports only file-based report results');

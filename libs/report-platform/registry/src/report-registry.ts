@@ -8,12 +8,20 @@ import { ReportCodeSchema } from '@report-platform/contracts';
 
 import { buildReportList } from './report-list';
 
+export type ReportLaunchOptions = {
+  onProgress?: (progressPercent: number) => void;
+};
+
 export type ReportDefinition<TResult = unknown> = {
   code: ReportCode;
   title: string;
   description: string;
   getMetadata: (currentUser: CurrentUser) => ReportMetadata;
-  launch: (currentUser: CurrentUser, params: unknown) => Promise<TResult>;
+  launch: (
+    currentUser: CurrentUser,
+    params: unknown,
+    options?: ReportLaunchOptions,
+  ) => Promise<TResult>;
 };
 
 export class ReportRegistry {

@@ -69,7 +69,11 @@ export function createSimpleSalesSummaryXlsxDefinition(
     getMetadata(_currentUser: CurrentUser): ReportMetadata {
       return reportMetadata;
     },
-    async launch(currentUser: CurrentUser, params: unknown): Promise<BuiltFile> {
+    async launch(
+      currentUser: CurrentUser,
+      params: unknown,
+      launchOptions,
+    ): Promise<BuiltFile> {
       const parsedParams = SimpleSalesSummaryXlsxParamsSchema.safeParse(params);
 
       if (!parsedParams.success) {
@@ -79,6 +83,7 @@ export function createSimpleSalesSummaryXlsxDefinition(
       const source = await sourceService.getSource(currentUser, {
         datasetKey: parsedParams.data.datasetKey,
       });
+      launchOptions?.onProgress?.(60);
       const templatePath = resolve(options.templatePath ?? TEMPLATE_PATH);
       const outputFileName = `sales-channel-matrix-${source.datasetKey}.xlsx`;
 
@@ -102,6 +107,7 @@ export function createSimpleSalesSummaryXlsxDefinition(
         });
 
         builtFile = result.builtFile;
+        launchOptions?.onProgress?.(90);
       } catch (error) {
         if (
           error instanceof Error &&

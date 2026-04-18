@@ -54,7 +54,11 @@ export function createSimpleSalesSummaryDefinition(
     getMetadata(_currentUser: CurrentUser): ReportMetadata {
       return reportMetadata;
     },
-    async launch(currentUser: CurrentUser, params: unknown): Promise<BuiltFile> {
+    async launch(
+      currentUser: CurrentUser,
+      params: unknown,
+      launchOptions,
+    ): Promise<BuiltFile> {
       const parsedParams = SimpleSalesSummaryParamsSchema.safeParse(params);
 
       if (!parsedParams.success) {
@@ -79,7 +83,16 @@ export function createSimpleSalesSummaryDefinition(
         options.templatePath,
       );
 
-      return reportService.run(currentUser);
+      const builtFile = await reportService.run(currentUser, {
+        onSourceLoaded() {
+          launchOptions?.onProgress?.(60);
+        },
+        onRecalculated() {
+          launchOptions?.onProgress?.(90);
+        },
+      });
+
+      return builtFile;
     },
   };
 }
