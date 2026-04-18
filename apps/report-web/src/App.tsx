@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import {
-  SIMPLE_SALES_SUMMARY_REPORT_CODE,
-  SimpleSalesSummaryResultSchema,
-  type SimpleSalesSummaryResult,
-} from '@report-definitions/simple-sales-summary';
-import {
   getReportMetadata,
   launchReport,
   listReports,
+  listSharedSettings,
 } from '@report-platform/api-client';
 import {
   DEFAULT_MOCK_USER_ID,
@@ -23,6 +19,7 @@ import {
   type ReportListItem,
   type ReportMetadata,
   type Role,
+  type SharedSettingOption,
 } from '@report-platform/contracts';
 
 type UiError = {
@@ -31,18 +28,8 @@ type UiError = {
 };
 
 type UiStep = 'select' | 'launch';
-
-type UiResult =
-  | {
-      kind: 'simple-sales-summary';
-      data: SimpleSalesSummaryResult;
-    }
-  | {
-      kind: 'downloadable-file';
-      data: DownloadableFileResult;
-    };
-
-const SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE = 'simple-sales-summary-xlsx';
+type WeatherCredentialMode = 'manual' | 'shared_setting';
+const SIMPLE_SALES_SUMMARY_REPORT_CODE = 'simple-sales-summary';
 
 const roleRank: Record<Role, number> = {
   Auditor: 0,
@@ -82,6 +69,10 @@ function toUiError(caughtError: unknown): UiError {
   };
 }
 
+function isSimpleSalesSummary(reportCode: string): boolean {
+  return reportCode === SIMPLE_SALES_SUMMARY_REPORT_CODE;
+}
+
 export function App() {
   const [step, setStep] = useState<UiStep>('select');
   const [mockUserId, setMockUserId] = useState<MockUserId>(DEFAULT_MOCK_USER_ID);
@@ -91,8 +82,17 @@ export function App() {
   const [listLoading, setListLoading] = useState(true);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [launching, setLaunching] = useState(false);
-  const [result, setResult] = useState<UiResult | null>(null);
+  const [result, setResult] = useState<DownloadableFileResult | null>(null);
   const [error, setError] = useState<UiError | null>(null);
+
+  const [weatherCredentialMode, setWeatherCredentialMode] =
+    useState<WeatherCredentialMode>('manual');
+  const [weatherApiKey, setWeatherApiKey] = useState('');
+  const [sharedSettingOptions, setSharedSettingOptions] = useState<SharedSettingOption[]>(
+    [],
+  );
+  const [selectedSharedSettingId, setSelectedSharedSettingId] = useState('');
+  const [sharedSettingsLoading, setSharedSettingsLoading] = useState(false);
 
   const currentUser = mockUsers[mockUserId];
 
@@ -192,7 +192,54 @@ export function App() {
     setStep('select');
     setResult(null);
     setError(null);
+    setWeatherCredentialMode('manual');
+    setWeatherApiKey('');
+    setSharedSettingOptions([]);
+    setSelectedSharedSettingId('');
+    setSharedSettingsLoading(false);
   }, [mockUserId, selectedReportCode]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (
+      step !== 'launch' ||
+      !isSimpleSalesSummary(selectedReportCode) ||
+      weatherCredentialMode !== 'shared_setting'
+    ) {
+      return;
+    }
+
+    setSharedSettingsLoading(true);
+    setSharedSettingOptions([]);
+    setSelectedSharedSettingId('');
+
+    listSharedSettings(SIMPLE_SALES_SUMMARY_REPORT_CODE, 'openWeather', { mockUserId })
+      .then((options) => {
+        if (cancelled) {
+          return;
+        }
+
+        setSharedSettingOptions(options);
+        setSelectedSharedSettingId(options[0]?.id ?? '');
+      })
+      .catch((caughtError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(toUiError(caughtError));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSharedSettingsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mockUserId, selectedReportCode, step, weatherCredentialMode]);
 
   const handleNextStep = () => {
     if (!selectedReportCode || !metadata) {
@@ -214,6 +261,48 @@ export function App() {
     setError(null);
   };
 
+  const buildLaunchParams = (): Record<string, unknown> | null => {
+    if (!isSimpleSalesSummary(selectedReportCode)) {
+      return {};
+    }
+
+    if (weatherCredentialMode === 'manual') {
+      const normalizedApiKey = weatherApiKey.trim();
+
+      if (!normalizedApiKey) {
+        setError({
+          code: 'VALIDATION_ERROR',
+          message: 'Введите OpenWeather API key для manual режима.',
+        });
+
+        return null;
+      }
+
+      return {
+        credentials: {
+          mode: 'manual',
+          apiKey: normalizedApiKey,
+        },
+      };
+    }
+
+    if (!selectedSharedSettingId) {
+      setError({
+        code: 'VALIDATION_ERROR',
+        message: 'Выберите shared setting для OpenWeather.',
+      });
+
+      return null;
+    }
+
+    return {
+      credentials: {
+        mode: 'shared_setting',
+        sharedSettingId: selectedSharedSettingId,
+      },
+    };
+  };
+
   const handleLaunchReport = async () => {
     if (!selectedReportCode || !metadata) {
       setError({
@@ -231,38 +320,27 @@ export function App() {
       return;
     }
 
+    const launchParams = buildLaunchParams();
+
+    if (!launchParams) {
+      return;
+    }
+
     setLaunching(true);
     setResult(null);
     setError(null);
 
     try {
-      const reportPayload = await launchReport(selectedReportCode, {}, { mockUserId });
+      const reportPayload = await launchReport(selectedReportCode, launchParams, {
+        mockUserId,
+      });
+      const parsedResult = DownloadableFileResultSchema.safeParse(reportPayload);
 
-      if (selectedReportCode === SIMPLE_SALES_SUMMARY_REPORT_CODE) {
-        const parsedResult = SimpleSalesSummaryResultSchema.safeParse(reportPayload);
-
-        if (!parsedResult.success) {
-          throw new Error('API returned an invalid success payload.');
-        }
-
-        setResult({
-          kind: 'simple-sales-summary',
-          data: parsedResult.data,
-        });
-      } else if (selectedReportCode === SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE) {
-        const parsedResult = DownloadableFileResultSchema.safeParse(reportPayload);
-
-        if (!parsedResult.success) {
-          throw new Error('API returned an invalid downloadable file payload.');
-        }
-
-        setResult({
-          kind: 'downloadable-file',
-          data: parsedResult.data,
-        });
-      } else {
-        throw new Error('Report is not available in the active launch scenario.');
+      if (!parsedResult.success) {
+        throw new Error('API returned an invalid downloadable file payload.');
       }
+
+      setResult(parsedResult.data);
     } catch (caughtError) {
       setError(toUiError(caughtError));
     } finally {
@@ -270,31 +348,78 @@ export function App() {
     }
   };
 
-  const renderResult = () => {
-    if (!result) {
+  const renderCredentialsBlock = () => {
+    if (!isSimpleSalesSummary(selectedReportCode)) {
       return null;
     }
 
-    if (result.kind === 'simple-sales-summary') {
-      return (
-        <section className="result-card">
-          <h2>Результат</h2>
-          <dl className="result-grid">
-            <div>
-              <dt>Tenant</dt>
-              <dd>{result.data.tenantName}</dd>
-            </div>
-            <div>
-              <dt>Organization</dt>
-              <dd>{result.data.organizationName}</dd>
-            </div>
-            <div>
-              <dt>Current sales</dt>
-              <dd>{result.data.currentSalesAmount.toLocaleString('en-US')}</dd>
-            </div>
-          </dl>
-        </section>
-      );
+    return (
+      <section className="credentials-block">
+        <p className="credentials-title">OpenWeather credentials</p>
+
+        <div className="mode-switch">
+          <label>
+            <input
+              type="radio"
+              checked={weatherCredentialMode === 'manual'}
+              onChange={() => setWeatherCredentialMode('manual')}
+            />
+            Manual
+          </label>
+
+          <label>
+            <input
+              type="radio"
+              checked={weatherCredentialMode === 'shared_setting'}
+              onChange={() => setWeatherCredentialMode('shared_setting')}
+            />
+            Shared setting
+          </label>
+        </div>
+
+        {weatherCredentialMode === 'manual' ? (
+          <label className="field">
+            <span>OpenWeather API key</span>
+            <input
+              type="password"
+              value={weatherApiKey}
+              onChange={(event) => setWeatherApiKey(event.target.value)}
+              placeholder="Enter OpenWeather API key"
+            />
+          </label>
+        ) : (
+          <div className="shared-settings-box">
+            {sharedSettingsLoading ? (
+              <p className="status-text">Загружаем shared settings...</p>
+            ) : null}
+
+            <label className="field">
+              <span>Shared setting</span>
+              <select
+                value={selectedSharedSettingId}
+                disabled={sharedSettingsLoading || sharedSettingOptions.length === 0}
+                onChange={(event) => setSelectedSharedSettingId(event.target.value)}
+              >
+                {sharedSettingOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {!sharedSettingsLoading && sharedSettingOptions.length === 0 ? (
+              <p className="status-text">Нет доступных shared settings для OpenWeather.</p>
+            ) : null}
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  const renderResult = () => {
+    if (!result) {
+      return null;
     }
 
     return (
@@ -303,20 +428,16 @@ export function App() {
         <dl className="result-grid">
           <div>
             <dt>File name</dt>
-            <dd>{result.data.fileName}</dd>
-          </div>
-          <div>
-            <dt>MIME type</dt>
-            <dd>{result.data.mimeType}</dd>
+            <dd>{result.fileName}</dd>
           </div>
           <div>
             <dt>Byte length</dt>
-            <dd>{result.data.byteLength.toLocaleString('en-US')}</dd>
+            <dd>{result.byteLength.toLocaleString('en-US')}</dd>
           </div>
           <div>
             <dt>Download</dt>
             <dd>
-              <a href={result.data.downloadUrl}>Download file</a>
+              <a href={result.downloadUrl}>Download file</a>
             </dd>
           </div>
         </dl>
@@ -331,7 +452,8 @@ export function App() {
           <p className="eyebrow">Reporting Prototype</p>
           <h1>Запуск отчета</h1>
           <p className="description">
-            Шаг 1: выбери пользователя и отчет. Шаг 2: запусти выбранный отчет.
+            Шаг 1: выбери пользователя и отчет. Шаг 2: настрой запуск и сгенерируй
+            результат.
           </p>
         </div>
 
@@ -401,6 +523,8 @@ export function App() {
                 Нельзя сгенерировать отчет: недостаточно прав доступа.
               </p>
             ) : null}
+
+            {renderCredentialsBlock()}
 
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={handleBackStep}>

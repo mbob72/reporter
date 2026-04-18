@@ -23,7 +23,7 @@ Reports access internal data only through repositories, and repositories enforce
 
 3. **External service access is explicit and controlled.**
 If a report needs external APIs, credentials are passed at launch time in one of two modes:
-- explicit credentials (`manual`: username/password)
+- explicit credentials (`manual`: for example API key)
 - shared credentials (`shared_setting`: id of credentials stored inside the system)
 
 4. **Report definitions are runtime-controlled entry points.**
@@ -87,8 +87,7 @@ Important:
 6. If report returns `BuiltFile`, API stores bytes in file store and returns a downloadable descriptor.
 7. UI downloads generated files through `GET /generated-files/:fileId`.
 
-Current `report-web` implementation uses steps 1, 2, 4, 6, 7 for active reports.
-Step 3 is platform-supported but not exercised by currently registered reports.
+Current `report-web` implementation uses all of the above steps for active reports.
 
 ---
 
@@ -131,8 +130,8 @@ External dependency declaration example:
 
 ```ts
 {
-  serviceKey: 'brokerApi',
-  authMode: 'shared_secret',
+  serviceKey: 'openWeather',
+  authMode: 'api_key',
   minRoleToUse: 'TenantAdmin'
 }
 ```
@@ -152,8 +151,8 @@ External dependency declaration example:
 Credentials are provided per launch, inside report params, only when needed:
 
 ```ts
-type BrokerCredentialInput =
-  | { mode: 'manual'; username: string; password: string }
+type OpenWeatherCredentialInput =
+  | { mode: 'manual'; apiKey: string }
   | { mode: 'shared_setting'; sharedSettingId: string };
 ```
 
@@ -163,6 +162,70 @@ Flow:
 - UI requests available shared credentials (optional)
 - on launch, user provides `manual` credentials or `shared_setting` reference
 - `ExternalClientFactory` resolves credentials and builds typed API client
+
+---
+
+## External Dependency Resilience
+
+External dependency calls should be resilient and business-explicit.
+
+### Criticality
+
+Each dependency usage is chosen in report/service code as one of:
+
+- `critical`: report fails when dependency still fails after retries
+- `optional`: report may continue with explicit fallback value
+
+Criticality is a business decision made by report/service code, not by the low-level HTTP client.
+
+### Retry Strategies
+
+Retry strategy is selected explicitly by report/service code (for example `none`, `transientTwice`, `transientFiveWithBackoff`).
+
+The platform resilience helper executes operations with:
+
+- retry loop
+- retryability classification
+- retry delays based on selected strategy
+
+### Retryable vs Non-Retryable Failures
+
+Retryable failures include transient issues:
+
+- network failure
+- timeout
+- HTTP `429`
+- HTTP `5xx`
+
+Non-retryable failures include permanent/request issues:
+
+- HTTP `400`
+- HTTP `401`
+- HTTP `403`
+- HTTP `404`
+- invalid local input before request execution
+
+### Optional Dependency Fallbacks
+
+For optional dependencies:
+
+- retries may still run if the failure is retryable
+- when retries are exhausted (or failure is non-retryable), report/service chooses an explicit fallback
+- fallback must be visible in report result when appropriate (not silently swallowed)
+
+Current example:
+
+- `simple-sales-summary` treats weather as optional
+- strategy: `transientTwice` (max 3 attempts total)
+- fallback value written to report: `!error!`
+
+### Critical Dependency Behavior
+
+For critical dependencies:
+
+- retries may run according to the selected strategy
+- if dependency still fails, execution throws and report launch fails
+- no silent fallback should be inserted
 
 ---
 
@@ -183,8 +246,6 @@ Current API wiring registers:
 
 - `simple-sales-summary`
 - `simple-sales-summary-xlsx`
-
-`broker-portfolio-summary` exists in `report-definitions` but is not currently registered in API providers.
 
 ---
 
@@ -222,10 +283,9 @@ For reports with external API auth:
 ```json
 {
   "params": {
-    "accountId": "ACC-101",
     "credentials": {
       "mode": "shared_setting",
-      "sharedSettingId": "broker-tenant-1-primary"
+      "sharedSettingId": "tenant-1-weather-default"
     }
   }
 }
@@ -236,18 +296,16 @@ or
 ```json
 {
   "params": {
-    "accountId": "ACC-101",
     "credentials": {
       "mode": "manual",
-      "username": "user1",
-      "password": "secret"
+      "apiKey": "replace-with-openweather-api-key"
     }
   }
 }
 ```
 
 The external-credentials examples describe supported payloads for dependency-enabled reports.
-They are not used by the two reports currently registered in API.
+They are used by `simple-sales-summary`.
 
 ---
 
@@ -267,8 +325,7 @@ Current `report-web` app path uses:
 - `listReports`
 - `getReportMetadata`
 - `launchReport`
-
-Additional operations (`listTenants`, `listOrganizations`, `listSharedSettings`) are implemented in the client and API, but are not wired into the current `App.tsx` flow.
+- `listSharedSettings` (for dependency credential selection in step 2)
 
 Client responsibilities:
 

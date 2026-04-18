@@ -4,73 +4,82 @@ import type {
   ReportMetadata,
 } from '@report-platform/contracts';
 import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
+import type { ExternalClientFactory } from '@report-platform/external-api';
 import type { ReportDefinition } from '@report-platform/registry';
+import type { BuiltFile } from '@report-platform/xlsx';
 
-import {
-  SimpleSalesSummaryParamsSchema,
-  SimpleSalesSummaryResultSchema,
-  type SimpleSalesSummaryResult,
-} from './simple-sales-summary.contract';
+import { SimpleSalesSummaryParamsSchema } from './simple-sales-summary.contract';
 import { SimpleSalesSummaryService } from './simple-sales-summary.service';
+import { SimpleSalesSummarySourceService } from './simple-sales-summary.source';
 
 export const SIMPLE_SALES_SUMMARY_REPORT_CODE = 'simple-sales-summary';
 
 type CreateSimpleSalesSummaryDefinitionOptions = {
   tenantRepository: TenantRepository;
   salesRepository: SalesRepository;
+  externalClientFactory: ExternalClientFactory;
+  templatePath?: string;
 };
 
-function throwValidationError(): never {
+const reportMetadata: ReportMetadata = {
+  code: SIMPLE_SALES_SUMMARY_REPORT_CODE,
+  title: 'Simple Sales Summary XLSX',
+  description:
+    'Template-based XLSX with tenant, organization, current sales, and current air temperature.',
+  minRoleToLaunch: 'TenantAdmin',
+  fields: [],
+  externalDependencies: [
+    {
+      serviceKey: 'openWeather',
+      authMode: 'api_key',
+      minRoleToUse: 'TenantAdmin',
+    },
+  ],
+};
+
+function throwValidationError(message: string): never {
   throw {
     code: 'VALIDATION_ERROR',
-    message: 'Invalid report params.',
+    message,
   } satisfies ApiError;
 }
 
 export function createSimpleSalesSummaryDefinition(
   options: CreateSimpleSalesSummaryDefinitionOptions,
-): ReportDefinition<SimpleSalesSummaryResult> {
-  const service = new SimpleSalesSummaryService(
-    options.tenantRepository,
-    options.salesRepository,
-  );
-
-  const baseMetadata = {
-    code: SIMPLE_SALES_SUMMARY_REPORT_CODE,
-    title: 'Simple Sales Summary',
-    description: 'Shows tenant, organization, and current sales amount.',
-    minRoleToLaunch: 'TenantAdmin',
-  } as const;
-
+): ReportDefinition<BuiltFile> {
   return {
-    code: baseMetadata.code,
-    title: baseMetadata.title,
-    description: baseMetadata.description,
+    code: reportMetadata.code,
+    title: reportMetadata.title,
+    description: reportMetadata.description,
     getMetadata(_currentUser: CurrentUser): ReportMetadata {
-      return {
-        ...baseMetadata,
-        fields: [],
-        externalDependencies: [],
-      };
+      return reportMetadata;
     },
-    async launch(
-      currentUser: CurrentUser,
-      params: unknown,
-    ): Promise<SimpleSalesSummaryResult> {
+    async launch(currentUser: CurrentUser, params: unknown): Promise<BuiltFile> {
       const parsedParams = SimpleSalesSummaryParamsSchema.safeParse(params);
 
       if (!parsedParams.success) {
-        throwValidationError();
+        throwValidationError('Invalid report params.');
       }
 
-      const reportResult = await service.run(currentUser);
-      const parsedResult = SimpleSalesSummaryResultSchema.safeParse(reportResult);
+      const openWeatherClient = await options.externalClientFactory.getOpenWeatherClient(
+        {
+          currentUser,
+          reportMetadata,
+          reportCode: reportMetadata.code,
+          credentialInput: parsedParams.data.credentials,
+        },
+      );
+      const sourceService = new SimpleSalesSummarySourceService(
+        options.tenantRepository,
+        options.salesRepository,
+        openWeatherClient,
+      );
+      const reportService = new SimpleSalesSummaryService(
+        sourceService,
+        options.templatePath,
+      );
 
-      if (!parsedResult.success) {
-        throw new Error('Invalid report response.');
-      }
-
-      return parsedResult.data;
+      return reportService.run(currentUser);
     },
   };
 }

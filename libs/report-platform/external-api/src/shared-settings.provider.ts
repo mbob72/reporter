@@ -9,8 +9,7 @@ export type SharedSettingOption = {
 export type ResolvedSharedSettingCredentials = {
   id: string;
   serviceKey: string;
-  username: string;
-  password: string;
+  apiKey: string;
 };
 
 export interface SharedSettingsProvider {

@@ -77,17 +77,16 @@ External access must be done through platform services/clients, not raw ad-hoc c
 
 Credential modes:
 
-- `manual`: explicit username/password in launch params
+- `manual`: explicit credential in launch params (for example API key)
 - `shared_setting`: reference to credentials stored in the platform
 
 Expected params shape (example):
 
 ```json
 {
-  "accountId": "ACC-101",
   "credentials": {
     "mode": "shared_setting",
-    "sharedSettingId": "broker-tenant-1-primary"
+    "sharedSettingId": "tenant-1-weather-default"
   }
 }
 ```
@@ -96,11 +95,9 @@ or
 
 ```json
 {
-  "accountId": "ACC-101",
   "credentials": {
     "mode": "manual",
-    "username": "user1",
-    "password": "secret"
+    "apiKey": "replace-with-openweather-api-key"
   }
 }
 ```
@@ -110,6 +107,33 @@ Implementation pattern:
 1. Declare external dependency in report metadata.
 2. Resolve/build external client via `ExternalClientFactory`.
 3. Pass typed client into report service.
+
+## 5.1. External Dependency Resilience Design
+
+For each external dependency, define in report/service code:
+
+- is it `critical` or `optional`?
+- which retry strategy is used?
+- which failures are retryable vs non-retryable?
+- if optional, what explicit fallback value is written into result/report?
+
+Rules:
+
+- low-level clients stay generic and typed
+- retry loop comes from reusable resilience helper
+- fallback semantics stay in report/service business logic
+
+Recommended default classification:
+
+- retryable: network errors, timeout, HTTP `429`, HTTP `5xx`
+- non-retryable: HTTP `400/401/403/404`, invalid local input before request execution
+
+Example (`simple-sales-summary` weather):
+
+- criticality: `optional`
+- strategy: `transientTwice`
+- fallback: `!error!`
+- behavior: report still launches and writes fallback into XLSX when weather fails
 
 ## 6. Implement Report Definition
 
@@ -206,3 +230,6 @@ A report is considered integrated only if all items are true:
 - validates params/result with zod
 - uses repositories for internal data access (no direct DB access)
 - uses controlled external credential flow when third-party APIs are involved
+- defines criticality (`critical`/`optional`) for each external dependency
+- chooses an explicit retry strategy for each external dependency usage
+- if dependency is optional, defines explicit fallback value/behavior in report output

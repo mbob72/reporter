@@ -1,12 +1,13 @@
-import type { ApiError, CurrentUser } from '@report-platform/contracts';
-import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
-import { getOrganizationsByTenant } from '@report-platform/data-access';
+import { resolve } from 'node:path';
 
-import type {
-  SimpleSalesSummarySource,
-  SimpleSalesSummaryResult,
-} from './simple-sales-summary.contract';
-import { SimpleSalesSummarySourceSchema } from './simple-sales-summary.contract';
+import type { ApiError, CurrentUser } from '@report-platform/contracts';
+import { fillTemplateWorkbook, type BuiltFile } from '@report-platform/xlsx';
+
+import { fillSummarySheet } from './simple-sales-summary.template';
+import type { SimpleSalesSummarySourceService } from './simple-sales-summary.source';
+
+const TEMPLATE_PATH =
+  'libs/report-definitions/simple-sales-summary/template-assets/simple-sales-summary-template.xlsx';
 
 function throwValidationError(message: string): never {
   throw {
@@ -15,64 +16,41 @@ function throwValidationError(message: string): never {
   } satisfies ApiError;
 }
 
-function throwNotFound(message: string): never {
-  throw {
-    code: 'NOT_FOUND',
-    message,
-  } satisfies ApiError;
-}
-
 export class SimpleSalesSummaryService {
   constructor(
-    private readonly tenantRepository: TenantRepository,
-    private readonly salesRepository: SalesRepository,
+    private readonly sourceService: SimpleSalesSummarySourceService,
+    private readonly templatePath = TEMPLATE_PATH,
   ) {}
 
-  async getSource(currentUser: CurrentUser): Promise<SimpleSalesSummarySource> {
-    const tenantId = currentUser.tenantId;
+  async run(currentUser: CurrentUser): Promise<BuiltFile> {
+    const source = await this.sourceService.getSource(currentUser);
+    // Weather fallback policy is resolved in source service; template fill is deterministic here.
+    const outputFileName = `simple-sales-summary-${source.tenantId}-${source.organizationId}.xlsx`;
 
-    if (!tenantId) {
-      throwValidationError('Simple Sales Summary requires a tenant-scoped user.');
+    try {
+      const { builtFile } = await fillTemplateWorkbook({
+        templatePath: resolve(this.templatePath),
+        outputFileName,
+        fillWorkbook(workbook) {
+          fillSummarySheet(workbook, source);
+        },
+      });
+
+      return builtFile;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message.startsWith('XLSX template file not found:') ||
+          error.message.startsWith('LibreOffice executable not found.') ||
+          error.message.startsWith('Failed to read XLSX template file:') ||
+          error.message.startsWith('Failed to open recalculated XLSX file:') ||
+          error.message.startsWith('LibreOffice recalculation failed') ||
+          error.message.startsWith('Missing worksheet in template:'))
+      ) {
+        throwValidationError(error.message);
+      }
+
+      throw error;
     }
-
-    const defaultOrganization = getOrganizationsByTenant(tenantId)[0];
-
-    if (!defaultOrganization) {
-      throwNotFound('Organization not found for current tenant.');
-    }
-
-    const tenantName = await this.tenantRepository.getTenantName(
-      currentUser,
-      tenantId,
-    );
-    const organizationName = await this.tenantRepository.getOrganizationName(
-      currentUser,
-      tenantId,
-      defaultOrganization.id,
-    );
-    const currentSalesAmount = await this.salesRepository.getCurrentSalesAmount(
-      currentUser,
-      tenantId,
-      defaultOrganization.id,
-    );
-
-    return SimpleSalesSummarySourceSchema.parse({
-      tenantId,
-      organizationId: defaultOrganization.id,
-      tenantName,
-      organizationName,
-      currentSalesAmount,
-      currency: 'USD',
-    });
-  }
-
-  async run(currentUser: CurrentUser): Promise<SimpleSalesSummaryResult> {
-    const source = await this.getSource(currentUser);
-
-    return {
-      tenantName: source.tenantName,
-      organizationName: source.organizationName,
-      currentSalesAmount: source.currentSalesAmount,
-    };
   }
 }

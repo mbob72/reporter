@@ -15,13 +15,10 @@ import {
   type TenantRepository,
 } from '@report-platform/data-access';
 import {
-  EXTERNAL_AUTH_PROVIDER_TOKEN,
   EXTERNAL_CLIENT_FACTORY_TOKEN,
   ExternalClientFactory,
-  MockExternalAuthProvider,
   MockSharedSettingsProvider,
   SHARED_SETTINGS_PROVIDER_TOKEN,
-  type ExternalAuthProvider,
   type SharedSettingsProvider,
 } from '@report-platform/external-api';
 import {
@@ -70,17 +67,11 @@ export const reportingProviders: Provider[] = [
     useFactory: (): SharedSettingsProvider => new MockSharedSettingsProvider(),
   },
   {
-    provide: EXTERNAL_AUTH_PROVIDER_TOKEN,
-    useFactory: (): ExternalAuthProvider => new MockExternalAuthProvider(),
-  },
-  {
     provide: EXTERNAL_CLIENT_FACTORY_TOKEN,
-    inject: [SHARED_SETTINGS_PROVIDER_TOKEN, EXTERNAL_AUTH_PROVIDER_TOKEN],
+    inject: [SHARED_SETTINGS_PROVIDER_TOKEN],
     useFactory: (
       sharedSettingsProvider: SharedSettingsProvider,
-      externalAuthProvider: ExternalAuthProvider,
-    ): ExternalClientFactory =>
-      new ExternalClientFactory(sharedSettingsProvider, externalAuthProvider),
+    ): ExternalClientFactory => new ExternalClientFactory(sharedSettingsProvider),
   },
   {
     provide: GENERATED_FILE_STORE_TOKEN,
@@ -91,6 +82,7 @@ export const reportingProviders: Provider[] = [
     inject: [
       TENANT_REPOSITORY_TOKEN,
       SALES_REPOSITORY_TOKEN,
+      EXTERNAL_CLIENT_FACTORY_TOKEN,
       PRODUCTS_REPOSITORY_TOKEN,
       CHANNELS_REPOSITORY_TOKEN,
       SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN,
@@ -98,6 +90,7 @@ export const reportingProviders: Provider[] = [
     useFactory: (
       tenantRepository: TenantRepository,
       salesRepository: SalesRepository,
+      externalClientFactory: ExternalClientFactory,
       productsRepository: ProductsRepository,
       channelsRepository: ChannelsRepository,
       datasetRotation: SimpleSalesSummaryXlsxDatasetRotation,
@@ -106,6 +99,7 @@ export const reportingProviders: Provider[] = [
         createSimpleSalesSummaryDefinition({
           tenantRepository,
           salesRepository,
+          externalClientFactory,
         }),
         createSimpleSalesSummaryXlsxDefinition({
           productsRepository,

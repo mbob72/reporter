@@ -308,7 +308,6 @@ export class ReportsController {
         const downloadableResult = {
           kind: 'downloadable-file',
           fileName: reportResult.fileName,
-          mimeType: reportResult.mimeType,
           byteLength: reportResult.bytes.byteLength,
           downloadUrl: `/generated-files/${fileId}`,
         };

@@ -21,10 +21,19 @@ export type XlsxCell = {
   value(value: unknown): XlsxCell;
   formula(): unknown;
   formula(formulaValue: string): XlsxCell;
+  style(name: string): unknown;
+  style(name: string, value: unknown): XlsxCell;
+  style(styleMap: Record<string, unknown>): XlsxCell;
+};
+
+export type XlsxColumn = {
+  width(): number;
+  width(widthValue: number): XlsxColumn;
 };
 
 export type XlsxSheet = {
   cell(address: string): XlsxCell;
+  column(columnName: string): XlsxColumn;
 };
 
 export type XlsxWorkbook = {

@@ -12,37 +12,36 @@ type MockSharedSettingRecord = {
   serviceKey: string;
   tenantId: string;
   allowedReportCodes: string[];
-  username: string;
-  password: string;
+  apiKey: string;
 };
 
 const mockSharedSettings: MockSharedSettingRecord[] = [
+  // TEMPORARY FOR LOCAL SPEED ONLY:
+  // Hardcoded API keys must not live in source code.
+  // Move these values to a secure secret store / environment-backed configuration.
   {
-    id: 'tenant-1-broker-default',
-    label: 'Tenant 1 Broker Default',
-    serviceKey: 'brokerApi',
+    id: 'tenant-1-weather-default',
+    label: 'Tenant 1 Weather Default',
+    serviceKey: 'openWeather',
     tenantId: 'tenant-1',
-    allowedReportCodes: ['broker-portfolio-summary'],
-    username: 'tenant1-broker-user',
-    password: 'tenant1-broker-pass',
+    allowedReportCodes: ['simple-sales-summary'],
+    apiKey: 'c93680e6b9eca47e5cebf5bf34a9b473',
   },
   {
-    id: 'tenant-1-broker-backup',
-    label: 'Tenant 1 Broker Backup',
-    serviceKey: 'brokerApi',
+    id: 'tenant-1-weather-backup',
+    label: 'Tenant 1 Weather Backup',
+    serviceKey: 'openWeather',
     tenantId: 'tenant-1',
-    allowedReportCodes: ['broker-portfolio-summary'],
-    username: 'tenant1-backup-user',
-    password: 'tenant1-backup-pass',
+    allowedReportCodes: ['simple-sales-summary'],
+    apiKey: 'd97d7fa23de6885660ccbb616107bb18',
   },
   {
-    id: 'tenant-2-broker-default',
-    label: 'Tenant 2 Broker Default',
-    serviceKey: 'brokerApi',
+    id: 'tenant-2-weather-default',
+    label: 'Tenant 2 Weather Default',
+    serviceKey: 'openWeather',
     tenantId: 'tenant-2',
-    allowedReportCodes: ['broker-portfolio-summary'],
-    username: 'tenant2-broker-user',
-    password: 'tenant2-broker-pass',
+    allowedReportCodes: ['simple-sales-summary'],
+    apiKey: 'd97d7fa23de6885660ccbb616107bb18',
   },
 ];
 
@@ -141,8 +140,7 @@ export class MockSharedSettingsProvider implements SharedSettingsProvider {
     return {
       id: setting.id,
       serviceKey: setting.serviceKey,
-      username: setting.username,
-      password: setting.password,
+      apiKey: setting.apiKey,
     };
   }
 }

@@ -15,7 +15,7 @@ export const ReportFieldMetadataSchema = z.object({
 
 export const ReportExternalDependencySchema = z.object({
   serviceKey: z.string().trim().min(1),
-  authMode: z.enum(['shared_secret']),
+  authMode: z.enum(['shared_secret', 'api_key']),
   minRoleToUse: RoleSchema,
 });
 

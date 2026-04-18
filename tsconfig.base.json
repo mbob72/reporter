@@ -25,9 +25,6 @@
       ],
       "@report-definitions/simple-sales-summary-xlsx": [
         "libs/report-definitions/simple-sales-summary-xlsx/src/index.ts"
-      ],
-      "@report-definitions/broker-portfolio-summary": [
-        "libs/report-definitions/broker-portfolio-summary/src/index.ts"
       ]
     }
   }

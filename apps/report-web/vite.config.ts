@@ -37,12 +37,6 @@ export default defineConfig({
           import.meta.url,
         ),
       ),
-      '@report-definitions/broker-portfolio-summary': fileURLToPath(
-        new URL(
-          '../../libs/report-definitions/broker-portfolio-summary/src/index.ts',
-          import.meta.url,
-        ),
-      ),
     },
   },
   server: {

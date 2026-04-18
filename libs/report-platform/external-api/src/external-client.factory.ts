@@ -1,16 +1,17 @@
-import type {
-  ApiError,
-  BrokerCredentialInput as ContractBrokerCredentialInput,
-  CurrentUser,
-  ReportMetadata,
-} from '@report-platform/contracts';
+import type { ApiError, CurrentUser, ReportMetadata } from '@report-platform/contracts';
 
-import type { ExternalAuthProvider } from './auth-provider';
-import type { BrokerApiClient } from './broker-api.client';
-import { MockBrokerApiClient } from './broker-api.client';
+import { OpenWeatherClient } from './open-weather.client';
 import type { SharedSettingsProvider } from './shared-settings.provider';
 
-export type BrokerCredentialInput = ContractBrokerCredentialInput;
+export type OpenWeatherCredentialInput =
+  | {
+      mode: 'manual';
+      apiKey: string;
+    }
+  | {
+      mode: 'shared_setting';
+      sharedSettingId: string;
+    };
 
 function throwValidationError(message: string): never {
   throw {
@@ -20,50 +21,34 @@ function throwValidationError(message: string): never {
 }
 
 export class ExternalClientFactory {
-  constructor(
-    private readonly sharedSettingsProvider: SharedSettingsProvider,
-    private readonly authProvider: ExternalAuthProvider,
-  ) {}
+  constructor(private readonly sharedSettingsProvider: SharedSettingsProvider) {}
 
-  async getBrokerApiClient(params: {
+  async getOpenWeatherClient(params: {
     currentUser: CurrentUser;
     reportMetadata: ReportMetadata;
     reportCode: string;
-    credentialInput: BrokerCredentialInput;
-  }): Promise<BrokerApiClient> {
+    credentialInput: OpenWeatherCredentialInput;
+  }): Promise<OpenWeatherClient> {
     const declaredDependency = params.reportMetadata.externalDependencies.find(
-      (dependency) => dependency.serviceKey === 'brokerApi',
+      (dependency) => dependency.serviceKey === 'openWeather',
     );
 
     if (!declaredDependency) {
       throwValidationError('Report requested undeclared external dependency.');
     }
 
-    let username: string;
-    let password: string;
-
     if (params.credentialInput.mode === 'manual') {
-      username = params.credentialInput.username;
-      password = params.credentialInput.password;
-    } else {
-      const resolvedSharedCredentials =
-        await this.sharedSettingsProvider.resolveCredentials({
-          currentUser: params.currentUser,
-          reportCode: params.reportCode,
-          serviceKey: 'brokerApi',
-          sharedSettingId: params.credentialInput.sharedSettingId,
-        });
-
-      username = resolvedSharedCredentials.username;
-      password = resolvedSharedCredentials.password;
+      return new OpenWeatherClient(params.credentialInput.apiKey);
     }
 
-    const authSession = await this.authProvider.authenticate({
-      serviceKey: 'brokerApi',
-      username,
-      password,
-    });
+    const resolvedSharedCredentials =
+      await this.sharedSettingsProvider.resolveCredentials({
+        currentUser: params.currentUser,
+        reportCode: params.reportCode,
+        serviceKey: 'openWeather',
+        sharedSettingId: params.credentialInput.sharedSettingId,
+      });
 
-    return new MockBrokerApiClient(authSession.accessToken);
+    return new OpenWeatherClient(resolvedSharedCredentials.apiKey);
   }
 }
