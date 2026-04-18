@@ -2,34 +2,32 @@
 
 ## Overview
 
-This project implements a reporting platform designed to:
+This repository is an Nx monorepo for report execution with strict access control.
+
+Main goals:
 
 - support multi-tenant data access
-- enforce strict security boundaries
-- separate report logic from infrastructure
-- allow independent evolution of:
-  - platform
-  - data-access
-  - report definitions
-
-The platform is built as an Nx monorepo with clear separation between:
-- applications (API, UI)
-- platform libraries
-- report implementations
+- enforce role and tenant boundaries
+- keep report business logic separate from infrastructure
+- allow independent evolution of platform libraries and report definitions
 
 ---
 
-## Core Principle
+## Core Principles
 
-**Reports are pure business logic.**
+1. **Reports do not use database credentials.**
+Report definitions never receive internal DB credentials and do not open DB connections directly.
 
-Reports must NOT:
-- access databases directly
-- use credentials
-- construct arbitrary queries
-- call external APIs directly
+2. **Internal data access is scope-driven.**
+Reports access internal data only through repositories, and repositories enforce access using the `CurrentUser` scope of the launcher.
 
-Reports operate only through a **controlled runtime** provided by the platform.
+3. **External service access is explicit and controlled.**
+If a report needs external APIs, credentials are passed at launch time in one of two modes:
+- explicit credentials (`manual`: username/password)
+- shared credentials (`shared_setting`: id of credentials stored inside the system)
+
+4. **Report definitions are runtime-controlled entry points.**
+Each report is resolved from the registry and executed through `launch(currentUser, params)`.
 
 ---
 
@@ -37,216 +35,305 @@ Reports operate only through a **controlled runtime** provided by the platform.
 
 ```txt
 apps/
-  report-api       → NestJS API (entry point)
-  report-web       → React UI
+  report-api       -> NestJS API (entry point)
+  report-web       -> React UI
 
 libs/
   report-platform/
-    contracts      → shared types & validation schemas
-    auth           → user resolution & access policy
-    data-access    → repositories (DB access layer)
-    registry       → report discovery & execution mapping
-    api-client     → frontend client for API
+    contracts      -> shared types and zod schemas
+    auth           -> user resolution and access helpers
+    data-access    -> repository interfaces and mock implementations
+    external-api   -> external auth and API client factory
+    xlsx           -> template runtime and BuiltFile model
+    file-store     -> generated file persistence and download ids
+    registry       -> report definition registry
+    api-client     -> frontend client for report API
 
   report-definitions/
-    <report-name>  → individual report implementations
+    <report-name>  -> report implementations
 ```
+
+---
+
+## Execution Context
+
+Current implementation passes `CurrentUser` into each report launch:
+
+```ts
+type CurrentUser = {
+  userId: string;
+  role: 'Auditor' | 'Member' | 'TenantAdmin' | 'Admin';
+  tenantId: string | null;
+  organizationId: string | null;
+};
+```
+
+The platform derives access from this scope.
+
+Important:
+
+- no internal DB credentials are passed to reports
+- repositories decide what data is accessible for this user
 
 ---
 
 ## Execution Flow
 
-1. User triggers report execution via UI
-2. API:
-   - resolves current user
-   - validates input
-   - finds report by `reportCode`
-3. Platform:
-   - applies access rules
-   - calls report definition
-4. Report:
-   - uses repositories to fetch data
-   - returns structured result
-5. API returns response to UI
+1. User selects report in UI.
+2. UI requests report metadata (`GET /reports/:code/metadata`) to render launch form and constraints.
+3. If report metadata declares external dependencies, UI may load shared credential options (`GET /reports/:reportCode/external-services/:serviceKey/shared-settings`).
+4. UI launches report (`POST /reports/:reportCode/launch`).
+5. API resolves `CurrentUser`, validates input, checks role access via report metadata, and executes report from registry.
+6. If report returns `BuiltFile`, API stores bytes in file store and returns a downloadable descriptor.
+7. UI downloads generated files through `GET /generated-files/:fileId`.
+
+Current `report-web` implementation uses steps 1, 2, 4, 6, 7 for active reports.
+Step 3 is platform-supported but not exercised by currently registered reports.
 
 ---
 
 ## Report Definition Model
 
-Each report is defined as:
-
 ```ts
 type ReportDefinition<TResult = unknown> = {
-  code: string;
+  code: ReportCode;
   title: string;
   description: string;
+  getMetadata: (currentUser: CurrentUser) => ReportMetadata;
   launch: (currentUser: CurrentUser, params: unknown) => Promise<TResult>;
 };
 ```
 
-Key idea:
-- `code` is the stable identifier
-- `launch` is the entry point
-- report is stateless and pure (given inputs + repositories)
+`launch` is the report entry point.
+
+`getMetadata` drives:
+
+- minimal role to launch
+- input fields for UI
+- declared external dependencies
 
 ---
 
-## Report Registry
+## Report Metadata Model
 
-The platform uses a registry to manage reports:
+```ts
+type ReportMetadata = {
+  code: string;
+  title: string;
+  description: string;
+  minRoleToLaunch: Role;
+  fields: ReportFieldMetadata[];
+  externalDependencies: ReportExternalDependency[];
+};
+```
+
+External dependency declaration example:
+
+```ts
+{
+  serviceKey: 'brokerApi',
+  authMode: 'shared_secret',
+  minRoleToUse: 'TenantAdmin'
+}
+```
+
+---
+
+## Credential Model
+
+### Internal Data (our DB / internal sources)
+
+- Report definitions do not receive DB credentials.
+- Reports use `data-access` repositories.
+- Repositories enforce role and tenant scope from `CurrentUser`.
+
+### External Services
+
+Credentials are provided per launch, inside report params, only when needed:
+
+```ts
+type BrokerCredentialInput =
+  | { mode: 'manual'; username: string; password: string }
+  | { mode: 'shared_setting'; sharedSettingId: string };
+```
+
+Flow:
+
+- report declares external dependency in metadata
+- UI requests available shared credentials (optional)
+- on launch, user provides `manual` credentials or `shared_setting` reference
+- `ExternalClientFactory` resolves credentials and builds typed API client
+
+---
+
+## Registry
+
+`ReportRegistry` is the single source of executable reports.
 
 ```ts
 class ReportRegistry {
   listReports(): ReportListItem[];
-  getReport(code: string): ReportDefinition | undefined;
+  getReport(reportCode: string): ReportDefinition | undefined;
+  listReportMetadata(currentUser?: CurrentUser): ReportMetadata[];
+  getReportMetadata(reportCode: string, currentUser?: CurrentUser): ReportMetadata | undefined;
 }
 ```
 
-Responsibilities:
-- store all available reports
-- expose list for UI
-- resolve report by `reportCode`
+Current API wiring registers:
+
+- `simple-sales-summary`
+- `simple-sales-summary-xlsx`
+
+`broker-portfolio-summary` exists in `report-definitions` but is not currently registered in API providers.
 
 ---
 
-## API Design
+## API Surface
 
-### List Reports
+### Reports
 
-```http
-GET /reports
-```
+- `GET /reports`
+- `GET /reports/:code/metadata`
+- `POST /reports/:reportCode/launch`
 
-Response:
+### External Service Support
 
-```json
-[
-  {
-    "code": "simple-sales-summary",
-    "title": "Simple Sales Summary",
-    "description": "Shows tenant, organization, and current sales amount"
-  }
-]
-```
+- `GET /reports/:reportCode/external-services/:serviceKey/shared-settings`
 
----
+### Scope Support for Inputs
 
-### Launch Report
+- `GET /tenants`
+- `GET /tenants/:tenantId/organizations`
 
-```http
-POST /reports/:reportCode/launch
-```
+### Generated Files
 
-Body:
+- `GET /generated-files/:fileId`
+
+Launch request shape:
 
 ```json
 {
-  "params": { ... }
+  "params": {}
 }
 ```
 
----
+For reports with external API auth:
 
-## Contracts Layer (`report-platform/contracts`)
-
-Contains:
-- shared types
-- zod schemas
-- API contracts
-
-Examples:
-- `CurrentUser`
-- `Role`
-- `ApiError`
-- `ReportListItem`
-- `LaunchReportBody`
-
-### Rule
-
-Contracts must be:
-- stable
-- framework-independent
-- reused across API, UI, and reports
-
----
-
-## Auth Layer (`report-platform/auth`)
-
-Responsibilities:
-- resolve current user (mock for now)
-- enforce access rules
-
-Example:
-
-```ts
-function canAccessTenantData(user, tenantId): boolean
+```json
+{
+  "params": {
+    "accountId": "ACC-101",
+    "credentials": {
+      "mode": "shared_setting",
+      "sharedSettingId": "broker-tenant-1-primary"
+    }
+  }
+}
 ```
 
-### Rule
+or
 
-Auth logic:
-- must not depend on DB
-- must be deterministic
-- must be reusable across platform
+```json
+{
+  "params": {
+    "accountId": "ACC-101",
+    "credentials": {
+      "mode": "manual",
+      "username": "user1",
+      "password": "secret"
+    }
+  }
+}
+```
+
+The external-credentials examples describe supported payloads for dependency-enabled reports.
+They are not used by the two reports currently registered in API.
+
+---
+
+## API Client (`report-platform/api-client`)
+
+Current exported operations:
+
+- `listReports`
+- `getReportMetadata`
+- `launchReport`
+- `listTenants`
+- `listOrganizations`
+- `listSharedSettings`
+
+Current `report-web` app path uses:
+
+- `listReports`
+- `getReportMetadata`
+- `launchReport`
+
+Additional operations (`listTenants`, `listOrganizations`, `listSharedSettings`) are implemented in the client and API, but are not wired into the current `App.tsx` flow.
+
+Client responsibilities:
+
+- validate inputs for launch and report code
+- parse API errors (`ApiErrorSchema`)
+- validate typed payloads where applicable
 
 ---
 
 ## Data Access Layer (`report-platform/data-access`)
 
-Contains:
-- repository interfaces
-- repository implementations (mock for now)
+Contains repository interfaces and implementations (currently mock).
 
-Example:
+Responsibilities:
 
-```ts
-interface SalesRepository {
-  getCurrentSalesAmount(user, tenantId, organizationId): Promise<number>;
-}
-```
+- enforce tenant and role restrictions
+- expose only controlled query operations
+- prevent report definitions from direct DB access
 
-### Responsibilities
+Critical rule:
 
-Repositories must:
-- enforce tenant access
-- enforce role restrictions
-- control available queries
-
-### Critical Rule
-
-Reports must NOT:
-- bypass repositories
-- access DB clients directly
+- report definitions must not import DB drivers or query builders directly
 
 ---
 
-## Report Definitions (`report-definitions/*`)
+## External API Layer (`report-platform/external-api`)
 
-Each report lives in its own module:
+Contains:
 
-```txt
-simple-sales-summary/
-  contract.ts
-  service.ts
-  definition.ts
-```
+- shared settings provider
+- external auth provider
+- typed external clients
+- `ExternalClientFactory`
 
-### Responsibilities
+Responsibilities:
 
-- validate params
-- orchestrate repository calls
-- format result
+- resolve shared credentials securely
+- authenticate against external services
+- provide typed clients to reports
+- block undeclared external dependency usage
 
-### Example
+---
 
-```ts
-const report = {
-  code: 'simple-sales-summary',
-  async launch(user, params) {
-    return service.run(user, params);
-  }
-};
-```
+## XLSX Report Concept
+
+`simple-sales-summary-xlsx` follows a template-driven model.
+
+Concept:
+
+- report result is built from source data and a fixed XLSX template
+- the template is a stable part of the report data model
+- formulas inside the template produce derived values after recalculation
+
+Execution pattern:
+
+1. Collect source rows from repositories (`products`, `channels`).
+2. Fill template sheets with fresh data.
+3. Recalculate workbook formulas (LibreOffice in headless mode).
+4. Read calculated derivative data if needed.
+5. Return `BuiltFile` bytes.
+
+API behavior for file reports:
+
+- controller stores `BuiltFile` in generated file store
+- response becomes `DownloadableFileResult`
 
 ---
 
@@ -255,18 +342,21 @@ const report = {
 ### Allowed
 
 ```txt
-report-definitions → contracts
-report-definitions → data-access
-report-api → platform libs
-report-web → contracts + api-client
+report-definitions -> contracts
+report-definitions -> data-access
+report-definitions -> registry (type-level report contract)
+report-definitions -> xlsx (for file/template reports)
+report-definitions -> external-api (only through controlled factory/clients)
+report-api -> platform libs + report-definitions
+report-web -> api-client + contracts (+ specific report contracts where needed)
 ```
 
 ### Forbidden
 
 ```txt
-report-definitions → direct DB access
-report-definitions → external APIs
-report-definitions → infrastructure
+report-definitions -> direct DB clients/drivers
+report-definitions -> unmanaged raw external integrations
+report-definitions -> internal DB credential handling
 ```
 
 ---
@@ -275,97 +365,35 @@ report-definitions → infrastructure
 
 Security is enforced in layers:
 
-1. **User identity**
-2. **Role-based access**
-3. **Tenant scoping**
-4. **Repository-level enforcement**
+1. Identity resolution (`CurrentUser` from request context; currently mock header-based).
+2. Launch authorization (`minRoleToLaunch` from metadata).
+3. Tenant/organization scoping (auth helpers + repository checks).
+4. External dependency declaration and credential resolution control.
+5. File output isolation via generated file store IDs.
 
-Even if a report is implemented incorrectly,
-it must NOT be able to access unauthorized data.
+Goal:
 
----
-
-## API Client (`report-platform/api-client`)
-
-Frontend interacts via:
-
-```ts
-listReports()
-launchReport(reportCode, params)
-```
-
-Responsibilities:
-- validate inputs
-- handle API errors
-- normalize responses
-
----
-
-## UI Responsibilities (`report-web`)
-
-- fetch report list
-- allow report selection
-- collect params
-- trigger execution
-- render result
-
-UI must NOT:
-- contain business logic
-- know about repositories
-- bypass API
-
----
-
-## Design Constraints
-
-- No raw DB access in reports
-- No credential exposure
-- All data access via repositories
-- All inputs validated via zod
-- All layers loosely coupled
+Even if a report has logic bugs, it should still be constrained by platform-level access checks and controlled integrations.
 
 ---
 
 ## Testing Strategy
 
-Reports must be testable via mocks:
+Reports should be testable with mocked dependencies:
 
-```ts
-const mockRuntime = {
-  repositories: { ... }
-};
-```
-
-This allows:
-- unit testing report logic
-- no dependency on real DB
-- fast feedback loop
-
----
-
-## Future Extensions
-
-Planned evolution:
-
-- async report execution (queues, workers)
-- audit logging
-- caching
-- report versioning
-- UI-driven report configuration
-- query tracing
+- mocked repositories for internal data
+- mocked external providers/clients for integrations
+- deterministic `CurrentUser` fixtures
+- template-runtime tests for XLSX generation and formula recalculation paths
 
 ---
 
 ## Summary
 
-This architecture ensures:
+This architecture keeps report code focused on business logic while the platform controls:
 
-- strong separation of concerns
-- safe data access
-- scalable report development
-- clear extension points
-
-The platform guarantees that:
-
-> Even if a report is implemented incorrectly,
-> it cannot access unauthorized data.
+- access scope for internal data
+- credential flow for external services
+- metadata-driven launch constraints
+- typed API contracts
+- file generation/download lifecycle
