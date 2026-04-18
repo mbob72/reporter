@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import {
+  getReportJobStatus,
   getReportMetadata,
   launchReport,
   listReports,
@@ -14,8 +15,8 @@ import {
 } from '@report-platform/auth';
 import {
   ApiErrorSchema,
-  DownloadableFileResultSchema,
   type DownloadableFileResult,
+  type ReportJobStatusResponse,
   type ReportListItem,
   type ReportMetadata,
   type Role,
@@ -27,7 +28,7 @@ type UiError = {
   message: string;
 };
 
-type UiStep = 'select' | 'launch';
+type UiStep = 'select' | 'launch' | 'progress';
 type WeatherCredentialMode = 'manual' | 'shared_setting';
 const SIMPLE_SALES_SUMMARY_REPORT_CODE = 'simple-sales-summary';
 
@@ -82,6 +83,9 @@ export function App() {
   const [listLoading, setListLoading] = useState(true);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<ReportJobStatusResponse | null>(null);
+  const [isPollingJob, setIsPollingJob] = useState(false);
   const [result, setResult] = useState<DownloadableFileResult | null>(null);
   const [error, setError] = useState<UiError | null>(null);
 
@@ -190,6 +194,9 @@ export function App() {
 
   useEffect(() => {
     setStep('select');
+    setActiveJobId(null);
+    setJobStatus(null);
+    setIsPollingJob(false);
     setResult(null);
     setError(null);
     setWeatherCredentialMode('manual');
@@ -241,6 +248,78 @@ export function App() {
     };
   }, [mockUserId, selectedReportCode, step, weatherCredentialMode]);
 
+  useEffect(() => {
+    if (step !== 'progress' || !activeJobId) {
+      setIsPollingJob(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const pollJobStatus = async () => {
+      try {
+        const status = await getReportJobStatus(activeJobId, { mockUserId });
+
+        if (cancelled) {
+          return;
+        }
+
+        setJobStatus(status);
+
+        if (status.status === 'completed') {
+          setIsPollingJob(false);
+
+          if (status.result) {
+            setResult(status.result);
+            setError(null);
+          } else {
+            setResult(null);
+            setError({
+              code: 'UNEXPECTED_ERROR',
+              message: 'Job completed without downloadable result.',
+            });
+          }
+
+          return;
+        }
+
+        if (status.status === 'failed') {
+          setIsPollingJob(false);
+          setResult(null);
+          setError({
+            code: 'REPORT_JOB_FAILED',
+            message: status.errorMessage ?? 'Report job failed.',
+          });
+          return;
+        }
+
+        timeoutId = setTimeout(() => {
+          void pollJobStatus();
+        }, 1000);
+      } catch (caughtError) {
+        if (cancelled) {
+          return;
+        }
+
+        setIsPollingJob(false);
+        setError(toUiError(caughtError));
+      }
+    };
+
+    setIsPollingJob(true);
+    void pollJobStatus();
+
+    return () => {
+      cancelled = true;
+      setIsPollingJob(false);
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [activeJobId, mockUserId, step]);
+
   const handleNextStep = () => {
     if (!selectedReportCode || !metadata) {
       setError({
@@ -251,12 +330,27 @@ export function App() {
     }
 
     setStep('launch');
+    setActiveJobId(null);
+    setJobStatus(null);
+    setIsPollingJob(false);
     setResult(null);
     setError(null);
   };
 
   const handleBackStep = () => {
     setStep('select');
+    setActiveJobId(null);
+    setJobStatus(null);
+    setIsPollingJob(false);
+    setResult(null);
+    setError(null);
+  };
+
+  const handleBackFromProgress = () => {
+    setStep('launch');
+    setActiveJobId(null);
+    setJobStatus(null);
+    setIsPollingJob(false);
     setResult(null);
     setError(null);
   };
@@ -327,20 +421,18 @@ export function App() {
     }
 
     setLaunching(true);
+    setActiveJobId(null);
+    setJobStatus(null);
+    setIsPollingJob(false);
     setResult(null);
     setError(null);
 
     try {
-      const reportPayload = await launchReport(selectedReportCode, launchParams, {
+      const acceptedJob = await launchReport(selectedReportCode, launchParams, {
         mockUserId,
       });
-      const parsedResult = DownloadableFileResultSchema.safeParse(reportPayload);
-
-      if (!parsedResult.success) {
-        throw new Error('API returned an invalid downloadable file payload.');
-      }
-
-      setResult(parsedResult.data);
+      setActiveJobId(acceptedJob.jobId);
+      setStep('progress');
     } catch (caughtError) {
       setError(toUiError(caughtError));
     } finally {
@@ -445,6 +537,57 @@ export function App() {
     );
   };
 
+  const renderProgressStep = () => {
+    if (step !== 'progress') {
+      return null;
+    }
+
+    const displayJobId = jobStatus?.jobId ?? activeJobId ?? '—';
+    const displayStatus = jobStatus?.status ?? 'queued';
+    const displayStage = jobStatus?.stage ?? 'queued';
+    const displayProgress = jobStatus?.progressPercent ?? 0;
+
+    return (
+      <section className="step-progress-block">
+        <h2>{selectedReport?.title ?? 'Report'}</h2>
+
+        <div className="progress-card">
+          <div className="job-meta">
+            <p>
+              <span>Job ID:</span> {displayJobId}
+            </p>
+            <p>
+              <span>Status:</span> {displayStatus}
+            </p>
+            <p>
+              <span>Stage:</span> {displayStage}
+            </p>
+            {jobStatus?.createdAt ? (
+              <p>
+                <span>Created:</span> {new Date(jobStatus.createdAt).toLocaleString()}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="progress-bar-shell" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={displayProgress}>
+            <div
+              className="progress-bar-fill"
+              style={{ width: `${displayProgress}%` }}
+            />
+          </div>
+          <p className="progress-value">{displayProgress.toFixed(0)}%</p>
+          {isPollingJob ? <p className="status-text">Обновляем статус каждые 1s...</p> : null}
+        </div>
+
+        <div className="button-row">
+          <button className="button button-secondary" type="button" onClick={handleBackFromProgress}>
+            Назад
+          </button>
+        </div>
+      </section>
+    );
+  };
+
   return (
     <main className="app-shell">
       <section className="panel">
@@ -452,8 +595,8 @@ export function App() {
           <p className="eyebrow">Reporting Prototype</p>
           <h1>Запуск отчета</h1>
           <p className="description">
-            Шаг 1: выбери пользователя и отчет. Шаг 2: настрой запуск и сгенерируй
-            результат.
+            Шаг 1: выбери пользователя и отчет. Шаг 2: настрой запуск. Шаг 3:
+            отслеживай прогресс и получи результат.
           </p>
         </div>
 
@@ -463,6 +606,9 @@ export function App() {
           </p>
           <p className={step === 'launch' ? 'step-item is-active' : 'step-item'}>
             2. Запуск
+          </p>
+          <p className={step === 'progress' ? 'step-item is-active' : 'step-item'}>
+            3. Прогресс
           </p>
         </div>
 
@@ -541,6 +687,8 @@ export function App() {
             </div>
           </section>
         ) : null}
+
+        {renderProgressStep()}
 
         {listLoading ? <p className="status-text">Загружаем список отчетов...</p> : null}
         {metadataLoading ? <p className="status-text">Загружаем metadata отчета...</p> : null}

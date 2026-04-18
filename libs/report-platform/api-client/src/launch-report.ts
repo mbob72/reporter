@@ -2,7 +2,9 @@ import { type MockUserId, MOCK_USER_HEADER } from '@report-platform/auth';
 import {
   ApiErrorSchema,
   LaunchReportParamsSchema,
+  ReportJobAcceptedSchema,
   ReportCodeSchema,
+  type ReportJobAccepted,
   type ApiError,
 } from '@report-platform/contracts';
 
@@ -24,11 +26,11 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
   }
 }
 
-export async function launchReport<TResult = unknown>(
+export async function launchReport(
   reportCode: string,
   params: Record<string, unknown>,
   options: LaunchReportOptions,
-): Promise<TResult> {
+): Promise<ReportJobAccepted> {
   const parsedReportCode = ReportCodeSchema.safeParse(reportCode);
 
   if (!parsedReportCode.success) {
@@ -73,5 +75,11 @@ export async function launchReport<TResult = unknown>(
     throw new Error(`API request failed with status ${response.status}.`);
   }
 
-  return payload as TResult;
+  const parsedResponse = ReportJobAcceptedSchema.safeParse(payload);
+
+  if (!parsedResponse.success) {
+    throw new Error('API returned an invalid report launch payload.');
+  }
+
+  return parsedResponse.data;
 }

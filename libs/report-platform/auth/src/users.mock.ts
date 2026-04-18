@@ -34,6 +34,7 @@ export const mockUsers = {
 } as const satisfies Record<string, CurrentUser>;
 
 export type MockUserId = keyof typeof mockUsers;
+export type MockUser = CurrentUser;
 
 export const DEFAULT_MOCK_USER_ID: MockUserId = 'tenant-admin-1';
 

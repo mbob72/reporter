@@ -76,7 +76,9 @@ export function createSimpleSalesSummaryXlsxDefinition(
         throwValidationError('Invalid report params.');
       }
 
-      const source = await sourceService.getSource(currentUser);
+      const source = await sourceService.getSource(currentUser, {
+        datasetKey: parsedParams.data.datasetKey,
+      });
       const templatePath = resolve(options.templatePath ?? TEMPLATE_PATH);
       const outputFileName = `sales-channel-matrix-${source.datasetKey}.xlsx`;
 

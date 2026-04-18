@@ -145,6 +145,60 @@ select {
   margin: 0 0 14px;
 }
 
+.step-progress-block {
+  display: grid;
+  gap: 14px;
+}
+
+.step-progress-block h2 {
+  margin: 0;
+}
+
+.progress-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(117, 87, 38, 0.2);
+  background: rgba(255, 252, 247, 0.82);
+}
+
+.job-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.job-meta p {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.job-meta span {
+  font-weight: 700;
+  color: #111827;
+}
+
+.progress-bar-shell {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(117, 87, 38, 0.16);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #8d5c11, #c2841b);
+  transition: width 220ms ease;
+}
+
+.progress-value {
+  margin: 0;
+  font-weight: 700;
+}
+
 .readonly-input {
   color: #52606d;
   background: rgba(248, 244, 236, 0.95) !important;

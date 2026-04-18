@@ -3,8 +3,6 @@ import {
   Controller,
   Get,
   HttpCode,
-  HttpException,
-  HttpStatus,
   Inject,
   Logger,
   Param,
@@ -29,68 +27,24 @@ import {
   getOrganizationsByTenant,
 } from '@report-platform/data-access';
 import {
-  ApiErrorSchema,
-  DownloadableFileResultSchema,
   LaunchReportBodySchema,
   ReportMetadataSchema,
   ReportListResponseSchema,
   SharedSettingOptionListSchema,
-  type Role,
 } from '@report-platform/contracts';
 import type { ApiError } from '@report-platform/contracts';
 import { ReportRegistry } from '@report-platform/registry';
-import type { BuiltFile } from '@report-platform/xlsx';
 
-import { REPORT_REGISTRY_TOKEN } from './reporting.providers';
+import { hasRoleAccess, toHttpException } from './report-http.helpers';
+import { ReportJobRunner } from './report-job.runner';
+import {
+  REPORT_JOB_RUNNER_TOKEN,
+  REPORT_REGISTRY_TOKEN,
+} from './reporting.providers';
 
 type RequestWithHeaders = {
   headers: Record<string, string | string[] | undefined>;
 };
-
-const roleRank: Record<Role, number> = {
-  Auditor: 0,
-  Member: 1,
-  TenantAdmin: 2,
-  Admin: 3,
-};
-
-function hasRoleAccess(currentRole: Role, minRole: Role): boolean {
-  return roleRank[currentRole] >= roleRank[minRole];
-}
-
-function isBuiltFile(value: unknown): value is BuiltFile {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const candidate = value as Partial<BuiltFile>;
-
-  return (
-    typeof candidate.fileName === 'string' &&
-    typeof candidate.mimeType === 'string' &&
-    candidate.bytes instanceof Uint8Array
-  );
-}
-
-function toHttpException(error: unknown): HttpException {
-  const parsedError = ApiErrorSchema.safeParse(error);
-
-  if (parsedError.success) {
-    switch (parsedError.data.code) {
-      case 'VALIDATION_ERROR':
-        return new HttpException(parsedError.data, HttpStatus.BAD_REQUEST);
-      case 'FORBIDDEN':
-        return new HttpException(parsedError.data, HttpStatus.FORBIDDEN);
-      case 'NOT_FOUND':
-        return new HttpException(parsedError.data, HttpStatus.NOT_FOUND);
-    }
-  }
-
-  return new HttpException(
-    { message: 'Unexpected server error.' },
-    HttpStatus.INTERNAL_SERVER_ERROR,
-  );
-}
 
 @Controller()
 export class ReportsController {
@@ -103,6 +57,8 @@ export class ReportsController {
     private readonly sharedSettingsProvider: SharedSettingsProvider,
     @Inject(GENERATED_FILE_STORE_TOKEN)
     private readonly generatedFileStore: GeneratedFileStore,
+    @Inject(REPORT_JOB_RUNNER_TOKEN)
+    private readonly reportJobRunner: ReportJobRunner,
   ) {}
 
   @Get('reports')
@@ -255,31 +211,25 @@ export class ReportsController {
     @Body() body: unknown,
     @Req() req: RequestWithHeaders,
   ) {
-    const parsedBody = LaunchReportBodySchema.safeParse(body);
+    try {
+      const parsedBody = LaunchReportBodySchema.safeParse(body);
 
-    if (!parsedBody.success) {
-      throw new HttpException(
-        {
+      if (!parsedBody.success) {
+        throw {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request payload.',
-        } satisfies ApiError,
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+        } satisfies ApiError;
+      }
 
-    const reportDefinition = this.reportRegistry.getReport(reportCode);
+      const reportDefinition = this.reportRegistry.getReport(reportCode);
 
-    if (!reportDefinition) {
-      throw new HttpException(
-        {
+      if (!reportDefinition) {
+        throw {
           code: 'NOT_FOUND',
           message: `Unknown report: ${reportCode}`,
-        } satisfies ApiError,
-        HttpStatus.NOT_FOUND,
-      );
-    }
+        } satisfies ApiError;
+      }
 
-    try {
       const currentUser = getCurrentUser(req.headers);
       const reportMetadata = reportDefinition.getMetadata(currentUser);
 
@@ -294,34 +244,11 @@ export class ReportsController {
         `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
       );
 
-      const reportResult = await reportDefinition.launch(
+      return this.reportJobRunner.start({
+        reportCode,
         currentUser,
-        parsedBody.data.params,
-      );
-
-      if (isBuiltFile(reportResult)) {
-        const { fileId } = await this.generatedFileStore.save({
-          fileName: reportResult.fileName,
-          mimeType: reportResult.mimeType,
-          bytes: reportResult.bytes,
-        });
-        const downloadableResult = {
-          kind: 'downloadable-file',
-          fileName: reportResult.fileName,
-          byteLength: reportResult.bytes.byteLength,
-          downloadUrl: `/generated-files/${fileId}`,
-        };
-        const parsedDownloadableResult =
-          DownloadableFileResultSchema.safeParse(downloadableResult);
-
-        if (!parsedDownloadableResult.success) {
-          throw new Error('Invalid downloadable file result.');
-        }
-
-        return parsedDownloadableResult.data;
-      }
-
-      return reportResult;
+        params: parsedBody.data.params,
+      });
     } catch (error) {
       throw toHttpException(error);
     }

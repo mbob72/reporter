@@ -188,7 +188,9 @@ Current step 1 (select user/report) already exists. For new reports, extend late
    - show credential mode switch (`manual` vs `shared_setting`)
    - load shared options via `listSharedSettings`
 5. build final `params` payload matching report `ParamsSchema`
-6. launch via `launchReport`
+6. launch via `launchReport` (returns `{ jobId, status: 'queued' }`)
+7. poll `getReportJobStatus(jobId)` until `completed` or `failed`
+8. when completed, read `jobStatus.result` (for file reports: `DownloadableFileResult`)
 
 Main frontend/API-client paths:
 
@@ -198,6 +200,7 @@ Main frontend/API-client paths:
 - `libs/report-platform/api-client/src/list-organizations.ts`
 - `libs/report-platform/api-client/src/list-shared-settings.ts`
 - `libs/report-platform/api-client/src/launch-report.ts`
+- `libs/report-platform/api-client/src/get-report-job-status.ts`
 
 ## 9. XLSX Report Variant (If Needed)
 
@@ -227,7 +230,8 @@ A report is considered integrated only if all items are true:
 
 - appears in `GET /reports`
 - returns valid metadata from `GET /reports/:code/metadata`
-- launches successfully through `POST /reports/:reportCode/launch` for allowed roles
+- launches successfully through `POST /reports/:reportCode/launch` for allowed roles and returns queued job payload
+- returns live job state from `GET /report-jobs/:jobId`
 - returns `FORBIDDEN` for disallowed roles
 - validates params/result with zod
 - uses repositories for internal data access (no direct DB access)

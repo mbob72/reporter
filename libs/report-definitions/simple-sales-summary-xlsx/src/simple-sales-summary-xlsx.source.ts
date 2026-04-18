@@ -49,8 +49,11 @@ export class SimpleSalesSummaryXlsxSourceService {
     private readonly datasetRotation: SimpleSalesSummaryXlsxDatasetRotation,
   ) {}
 
-  async getSource(currentUser: CurrentUser): Promise<SimpleSalesSummaryXlsxSource> {
-    const datasetKey = this.datasetRotation.nextDatasetKey();
+  async getSource(
+    currentUser: CurrentUser,
+    params?: { datasetKey?: string },
+  ): Promise<SimpleSalesSummaryXlsxSource> {
+    const datasetKey = params?.datasetKey ?? this.datasetRotation.nextDatasetKey();
     const [products, channels] = await Promise.all([
       this.productsRepository.listProductsForTemplate(currentUser, datasetKey),
       this.channelsRepository.listChannelsForTemplate(currentUser, datasetKey),

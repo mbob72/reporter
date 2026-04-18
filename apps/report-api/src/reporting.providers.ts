@@ -24,19 +24,23 @@ import {
 import {
   GENERATED_FILE_STORE_TOKEN,
   InMemoryGeneratedFileStore,
+  type GeneratedFileStore,
 } from '@report-platform/file-store';
-import { ReportRegistry } from '@report-platform/registry';
-import { createSimpleSalesSummaryDefinition } from '@report-definitions/simple-sales-summary';
 import {
   SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS,
   InMemorySimpleSalesSummaryXlsxDatasetRotation,
-  createSimpleSalesSummaryXlsxDefinition,
   type SimpleSalesSummaryXlsxDatasetRotation,
 } from '@report-definitions/simple-sales-summary-xlsx';
+
+import { ReportJobRunner } from './report-job.runner';
+import { InMemoryReportJobStore } from './report-job.store';
+import { createReportRegistry } from './report-registry.factory';
 
 export const REPORT_REGISTRY_TOKEN = 'REPORT_REGISTRY_TOKEN';
 export const SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN =
   'SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN';
+export const REPORT_JOB_STORE_TOKEN = 'REPORT_JOB_STORE_TOKEN';
+export const REPORT_JOB_RUNNER_TOKEN = 'REPORT_JOB_RUNNER_TOKEN';
 
 export const reportingProviders: Provider[] = [
   {
@@ -78,6 +82,23 @@ export const reportingProviders: Provider[] = [
     useFactory: () => new InMemoryGeneratedFileStore(),
   },
   {
+    provide: REPORT_JOB_STORE_TOKEN,
+    useFactory: () => new InMemoryReportJobStore(),
+  },
+  {
+    provide: REPORT_JOB_RUNNER_TOKEN,
+    inject: [
+      REPORT_JOB_STORE_TOKEN,
+      GENERATED_FILE_STORE_TOKEN,
+      SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN,
+    ],
+    useFactory: (
+      reportJobStore: InMemoryReportJobStore,
+      generatedFileStore: GeneratedFileStore,
+      datasetRotation: SimpleSalesSummaryXlsxDatasetRotation,
+    ) => new ReportJobRunner(reportJobStore, generatedFileStore, datasetRotation),
+  },
+  {
     provide: REPORT_REGISTRY_TOKEN,
     inject: [
       TENANT_REPOSITORY_TOKEN,
@@ -95,17 +116,13 @@ export const reportingProviders: Provider[] = [
       channelsRepository: ChannelsRepository,
       datasetRotation: SimpleSalesSummaryXlsxDatasetRotation,
     ) =>
-      new ReportRegistry([
-        createSimpleSalesSummaryDefinition({
-          tenantRepository,
-          salesRepository,
-          externalClientFactory,
-        }),
-        createSimpleSalesSummaryXlsxDefinition({
-          productsRepository,
-          channelsRepository,
-          datasetRotation,
-        }),
-      ]),
+      createReportRegistry({
+        tenantRepository,
+        salesRepository,
+        externalClientFactory,
+        productsRepository,
+        channelsRepository,
+        datasetRotation,
+      }),
   },
 ];

@@ -83,9 +83,11 @@ Important:
 2. UI requests report metadata (`GET /reports/:code/metadata`) to render launch form and constraints.
 3. If report metadata declares external dependencies, UI may load shared credential options (`GET /reports/:reportCode/external-services/:serviceKey/shared-settings`).
 4. UI launches report (`POST /reports/:reportCode/launch`).
-5. API resolves `CurrentUser`, validates input, checks role access via report metadata, and executes report from registry.
-6. If report returns `BuiltFile`, API stores bytes in file store and returns a downloadable descriptor.
-7. UI downloads generated files through `GET /generated-files/:fileId`.
+5. API validates launch request and access, creates an in-memory job, forks a child process, and immediately responds with `{ jobId, status: 'queued' }`.
+6. Worker process executes `reportDefinition.launch(...)` and reports progress over IPC (`preparing` -> `generating`).
+7. Parent API process receives `BuiltFile` over IPC, stores bytes in generated file store, and finalizes job status/result.
+8. UI polls `GET /report-jobs/:jobId` every 1 second until `completed` or `failed`.
+9. UI downloads generated files through `GET /generated-files/:fileId`.
 
 Current `report-web` implementation uses all of the above steps for active reports.
 
@@ -257,6 +259,7 @@ Current API wiring registers:
 - `GET /reports`
 - `GET /reports/:code/metadata`
 - `POST /reports/:reportCode/launch`
+- `GET /report-jobs/:jobId`
 
 ### External Service Support
 
@@ -276,6 +279,29 @@ Launch request shape:
 ```json
 {
   "params": {}
+}
+```
+
+Launch response shape:
+
+```json
+{
+  "jobId": "e9b64d90-c4c5-4dc6-bf6d-c2e70de5f5e0",
+  "status": "queued"
+}
+```
+
+Job status response shape:
+
+```json
+{
+  "jobId": "e9b64d90-c4c5-4dc6-bf6d-c2e70de5f5e0",
+  "reportCode": "simple-sales-summary",
+  "status": "running",
+  "stage": "generating",
+  "progressPercent": 70,
+  "createdAt": "2026-04-18T12:00:00.000Z",
+  "startedAt": "2026-04-18T12:00:00.500Z"
 }
 ```
 
@@ -317,6 +343,7 @@ Current exported operations:
 - `listReports`
 - `getReportMetadata`
 - `launchReport`
+- `getReportJobStatus`
 - `listTenants`
 - `listOrganizations`
 - `listSharedSettings`
@@ -326,6 +353,7 @@ Current `report-web` app path uses:
 - `listReports`
 - `getReportMetadata`
 - `launchReport`
+- `getReportJobStatus`
 - `listSharedSettings` (for dependency credential selection in step 2)
 
 Client responsibilities:
@@ -390,8 +418,20 @@ Execution pattern:
 
 API behavior for file reports:
 
-- controller stores `BuiltFile` in generated file store
-- response becomes `DownloadableFileResult`
+- worker returns `BuiltFile` to parent via IPC
+- parent controller layer stores bytes in generated file store
+- completed job status contains `DownloadableFileResult`
+
+`simple-sales-summary-xlsx` dataset rotation detail:
+
+- parent reserves `datasetKey` before worker launch
+- worker uses reserved key from internal params when provided
+- rotation is global to parent process and does not reset per worker
+
+Async prototype limitations:
+
+- job store is in-memory only
+- state is not restart-safe (jobs are lost when API process restarts)
 
 ---
 
