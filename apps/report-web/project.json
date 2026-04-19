@@ -9,6 +9,18 @@
       "options": {
         "command": "vite --config apps/report-web/vite.config.ts"
       }
+    },
+    "storybook": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook dev -p 4401 -c apps/report-web/.storybook"
+      }
+    },
+    "build-storybook": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook build -c apps/report-web/.storybook -o dist/storybook/report-web"
+      }
     }
   },
   "tags": []
