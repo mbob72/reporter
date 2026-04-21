@@ -5,7 +5,7 @@ import { createReportRegistryWithoutNest } from './report-registry.factory';
 import type {
   ParentToWorkerMessage,
   WorkerToParentMessage,
-} from './report-job.types';
+} from './report-instance.types';
 
 function toErrorMessage(error: unknown): string {
   const parsedError = ApiErrorSchema.safeParse(error);
@@ -53,7 +53,7 @@ async function run(message: ParentToWorkerMessage): Promise<void> {
         progressQueue = progressQueue.then(() =>
           sendMessage({
             type: 'progress',
-            jobId: message.jobId,
+            reportInstanceId: message.reportInstanceId,
             stage: event.stage,
             progressPercent: event.progressPercent,
           }),
@@ -64,7 +64,7 @@ async function run(message: ParentToWorkerMessage): Promise<void> {
     await progressQueue;
     await sendMessage({
       type: 'completed-built-file',
-      jobId: message.jobId,
+      reportInstanceId: message.reportInstanceId,
       fileName: builtFile.fileName,
       mimeType: builtFile.mimeType,
       bytes: builtFile.bytes,
@@ -74,7 +74,7 @@ async function run(message: ParentToWorkerMessage): Promise<void> {
     await progressQueue;
     await sendMessage({
       type: 'failed',
-      jobId: message.jobId,
+      reportInstanceId: message.reportInstanceId,
       errorMessage: toErrorMessage(error),
     });
     process.exit(1);

@@ -1,33 +1,37 @@
 import type { MockUser } from '@report-platform/auth';
 import type {
   DownloadableFileResult,
-  ReportJobStage,
-  ReportJobStatus,
+  ReportInstanceStage,
+  ReportInstanceStatus,
 } from '@report-platform/contracts';
 
-export type InternalReportJobRecord = {
-  jobId: string;
+export type InternalReportInstanceRecord = {
+  id: string;
   reportCode: string;
-  status: ReportJobStatus;
-  stage: ReportJobStage;
+  status: ReportInstanceStatus;
+  stage: ReportInstanceStage;
   progressPercent: number;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
   result?: DownloadableFileResult;
   errorMessage?: string;
+  artifactId?: string;
+  fileName?: string;
+  mimeType?: string;
+  byteLength?: number;
 };
 
 export type WorkerProgressMessage = {
   type: 'progress';
-  jobId: string;
+  reportInstanceId: string;
   stage: 'preparing' | 'generating';
   progressPercent: number;
 };
 
 export type WorkerCompletedBuiltFileMessage = {
   type: 'completed-built-file';
-  jobId: string;
+  reportInstanceId: string;
   fileName: string;
   mimeType: string;
   bytes: Uint8Array;
@@ -35,7 +39,7 @@ export type WorkerCompletedBuiltFileMessage = {
 
 export type WorkerFailedMessage = {
   type: 'failed';
-  jobId: string;
+  reportInstanceId: string;
   errorMessage: string;
 };
 
@@ -46,7 +50,7 @@ export type WorkerToParentMessage =
 
 export type ParentStartMessage = {
   type: 'start';
-  jobId: string;
+  reportInstanceId: string;
   reportCode: string;
   currentUser: MockUser;
   params: unknown;

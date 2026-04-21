@@ -1,11 +1,11 @@
 import { type MockUserId, MOCK_USER_HEADER } from '@report-platform/auth';
 import {
   ApiErrorSchema,
-  ReportJobStatusResponseSchema,
-  type ReportJobStatusResponse,
+  ReportInstanceSchema,
+  type ReportInstance,
 } from '@report-platform/contracts';
 
-export type GetReportJobStatusOptions = {
+export type GetReportInstanceOptions = {
   mockUserId: MockUserId;
 };
 
@@ -23,22 +23,25 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
   }
 }
 
-export async function getReportJobStatus(
-  jobId: string,
-  options: GetReportJobStatusOptions,
-): Promise<ReportJobStatusResponse> {
-  const normalizedJobId = jobId.trim();
+export async function getReportInstance(
+  reportInstanceId: string,
+  options: GetReportInstanceOptions,
+): Promise<ReportInstance> {
+  const normalizedReportInstanceId = reportInstanceId.trim();
 
-  if (!normalizedJobId) {
-    throw new Error('Invalid report job id.');
+  if (!normalizedReportInstanceId) {
+    throw new Error('Invalid report instance id.');
   }
 
-  const response = await fetch(`/report-jobs/${encodeURIComponent(normalizedJobId)}`, {
-    method: 'GET',
-    headers: {
-      [MOCK_USER_HEADER]: options.mockUserId,
+  const response = await fetch(
+    `/report-runs/${encodeURIComponent(normalizedReportInstanceId)}`,
+    {
+      method: 'GET',
+      headers: {
+        [MOCK_USER_HEADER]: options.mockUserId,
+      },
     },
-  });
+  );
   const payload = await parseJsonSafely(response);
 
   if (!response.ok) {
@@ -51,10 +54,10 @@ export async function getReportJobStatus(
     throw new Error(`API request failed with status ${response.status}.`);
   }
 
-  const parsedResponse = ReportJobStatusResponseSchema.safeParse(payload);
+  const parsedResponse = ReportInstanceSchema.safeParse(payload);
 
   if (!parsedResponse.success) {
-    throw new Error('API returned an invalid report job status payload.');
+    throw new Error('API returned an invalid report instance payload.');
   }
 
   return parsedResponse.data;

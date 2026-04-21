@@ -65,6 +65,9 @@ export type LaunchConfigurationModel = {
     manualApiKey?: string;
     sharedSettings: SharedSettingOption[];
     selectedSharedSettingId?: string;
+    sharedSettingsLoading?: boolean;
+    sharedSettingsEmptyReason?: string;
+    sharedModeDisabled?: boolean;
   };
   canLaunch: boolean;
   disabledReason?: string;

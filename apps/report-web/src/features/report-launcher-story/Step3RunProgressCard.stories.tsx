@@ -9,7 +9,7 @@ const meta = {
   tags: ['autodocs'],
   args: {
     reportName: 'Weather Anomaly Export',
-    jobId: 'job-demo-7bcf4a',
+    reportInstanceId: 'instance-demo-7bcf4a',
     onRefresh: () => undefined,
     onRetry: () => undefined,
     onGoToResult: () => undefined,

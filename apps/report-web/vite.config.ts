@@ -25,7 +25,7 @@ export default defineConfig({
       '/generated-files': {
         target: 'http://127.0.0.1:3000',
       },
-      '/report-jobs': {
+      '/report-runs': {
         target: 'http://127.0.0.1:3000',
       },
     },

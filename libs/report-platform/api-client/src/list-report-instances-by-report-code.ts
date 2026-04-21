@@ -1,14 +1,12 @@
 import { type MockUserId, MOCK_USER_HEADER } from '@report-platform/auth';
 import {
   ApiErrorSchema,
-  LaunchReportParamsSchema,
-  ReportLaunchAcceptedSchema,
   ReportCodeSchema,
-  type ReportLaunchAccepted,
-  type ApiError,
+  ReportInstanceListResponseSchema,
+  type ReportInstanceListResponse,
 } from '@report-platform/contracts';
 
-export type LaunchReportOptions = {
+export type ListReportInstancesByReportCodeOptions = {
   mockUserId: MockUserId;
 };
 
@@ -26,43 +24,25 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
   }
 }
 
-export async function launchReport(
+export async function listReportInstancesByReportCode(
   reportCode: string,
-  params: Record<string, unknown>,
-  options: LaunchReportOptions,
-): Promise<ReportLaunchAccepted> {
+  options: ListReportInstancesByReportCodeOptions,
+): Promise<ReportInstanceListResponse> {
   const parsedReportCode = ReportCodeSchema.safeParse(reportCode);
 
   if (!parsedReportCode.success) {
-    throw {
-      code: 'VALIDATION_ERROR',
-      message: 'Invalid report code.',
-    } satisfies ApiError;
-  }
-
-  const parsedParams = LaunchReportParamsSchema.safeParse(params);
-
-  if (!parsedParams.success) {
-    throw {
-      code: 'VALIDATION_ERROR',
-      message: 'Invalid request payload.',
-    } satisfies ApiError;
+    throw new Error('Invalid report code.');
   }
 
   const response = await fetch(
-    `/reports/${encodeURIComponent(parsedReportCode.data)}/launch`,
+    `/reports/${encodeURIComponent(parsedReportCode.data)}/instances`,
     {
-      method: 'POST',
+      method: 'GET',
       headers: {
-        'content-type': 'application/json',
         [MOCK_USER_HEADER]: options.mockUserId,
       },
-      body: JSON.stringify({
-        params: parsedParams.data,
-      }),
     },
   );
-
   const payload = await parseJsonSafely(response);
 
   if (!response.ok) {
@@ -75,10 +55,10 @@ export async function launchReport(
     throw new Error(`API request failed with status ${response.status}.`);
   }
 
-  const parsedResponse = ReportLaunchAcceptedSchema.safeParse(payload);
+  const parsedResponse = ReportInstanceListResponseSchema.safeParse(payload);
 
   if (!parsedResponse.success) {
-    throw new Error('API returned an invalid report launch payload.');
+    throw new Error('API returned an invalid report instances payload.');
   }
 
   return parsedResponse.data;

@@ -14,7 +14,7 @@ import type { RunProgressSnapshot } from '../types';
 
 type Step3RunProgressCardProps = {
   reportName: string;
-  jobId: string;
+  reportInstanceId: string;
   snapshot: RunProgressSnapshot;
   onRefresh?: () => void;
   onRetry?: () => void;
@@ -67,7 +67,7 @@ function getDiagnosticColor(level: 'info' | 'warning' | 'error') {
 
 export function Step3RunProgressCard({
   reportName,
-  jobId,
+  reportInstanceId,
   snapshot,
   onRefresh,
   onRetry,
@@ -101,7 +101,7 @@ export function Step3RunProgressCard({
             <Stack gap={4}>
               <Text fw={700}>{reportName}</Text>
               <Text size="sm" c="dimmed">
-                Job ID: {jobId}
+                Report instance ID: {reportInstanceId}
               </Text>
               <Text size="sm" c="dimmed">
                 Current stage: {snapshot.stageLabel}

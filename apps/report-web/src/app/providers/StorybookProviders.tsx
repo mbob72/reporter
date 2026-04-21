@@ -8,21 +8,28 @@ import { reportWebTheme } from '../theme';
 
 type StorybookProvidersProps = PropsWithChildren<{
   initialEntries?: string[];
+  withRouter?: boolean;
 }>;
 
 export function StorybookProviders({
   children,
   initialEntries = ['/'],
+  withRouter = true,
 }: StorybookProvidersProps) {
   const store = useMemo(() => createStorybookStore(), []);
+  const content = (
+    <MantineProvider theme={reportWebTheme} defaultColorScheme="light">
+      {children}
+    </MantineProvider>
+  );
 
   return (
     <Provider store={store}>
-      <MemoryRouter initialEntries={initialEntries}>
-        <MantineProvider theme={reportWebTheme} defaultColorScheme="light">
-          {children}
-        </MantineProvider>
-      </MemoryRouter>
+      {withRouter ? (
+        <MemoryRouter initialEntries={initialEntries}>{content}</MemoryRouter>
+      ) : (
+        content
+      )}
     </Provider>
   );
 }

@@ -7,33 +7,32 @@ import { Logger } from '@nestjs/common';
 import type { MockUser } from '@report-platform/auth';
 import {
   DownloadableFileResultSchema,
-  ReportJobAcceptedSchema,
+  ReportLaunchAcceptedSchema,
   type ApiError,
-  type ReportJobAccepted,
+  type ReportLaunchAccepted,
 } from '@report-platform/contracts';
-import type { GeneratedFileStore } from '@report-platform/file-store';
 import {
   SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
   type SimpleSalesSummaryXlsxDatasetRotation,
 } from '@report-definitions/simple-sales-summary-xlsx';
 
-import { InMemoryReportJobStore } from './report-job.store';
+import { FileSystemReportInstanceStore } from './report-instance.store';
 import type {
   ParentStartMessage,
   WorkerCompletedBuiltFileMessage,
   WorkerFailedMessage,
   WorkerProgressMessage,
-} from './report-job.types';
+} from './report-instance.types';
 
-type StartReportJobArgs = {
+type StartReportInstanceArgs = {
   reportCode: string;
   currentUser: MockUser;
   params: Record<string, unknown>;
 };
 
-type JobLifecycleState = 'active' | 'finalizing' | 'finalized';
+type InstanceLifecycleState = 'active' | 'finalizing' | 'finalized';
 
-function generateJobId(): string {
+function generateReportInstanceId(): string {
   if (typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
@@ -54,14 +53,14 @@ function toErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Unexpected report job error.';
+  return 'Unexpected report instance error.';
 }
 
 function resolveWorkerLaunchConfig(): {
   workerPath: string;
   execArgv: string[];
 } {
-  const tsWorkerPath = resolve(__dirname, 'report-job.worker.ts');
+  const tsWorkerPath = resolve(__dirname, 'report-instance.worker.ts');
 
   if (existsSync(tsWorkerPath)) {
     return {
@@ -71,7 +70,7 @@ function resolveWorkerLaunchConfig(): {
   }
 
   return {
-    workerPath: resolve(__dirname, 'report-job.worker.js'),
+    workerPath: resolve(__dirname, 'report-instance.worker.js'),
     execArgv: [],
   };
 }
@@ -109,7 +108,7 @@ function isProgressMessage(value: unknown): value is WorkerProgressMessage {
   return (
     isRecord(value) &&
     value.type === 'progress' &&
-    typeof value.jobId === 'string' &&
+    typeof value.reportInstanceId === 'string' &&
     (value.stage === 'preparing' || value.stage === 'generating') &&
     typeof value.progressPercent === 'number'
   );
@@ -121,7 +120,7 @@ function isCompletedMessage(
   return (
     isRecord(value) &&
     value.type === 'completed-built-file' &&
-    typeof value.jobId === 'string' &&
+    typeof value.reportInstanceId === 'string' &&
     typeof value.fileName === 'string' &&
     typeof value.mimeType === 'string' &&
     value.bytes !== undefined
@@ -132,46 +131,45 @@ function isFailedMessage(value: unknown): value is WorkerFailedMessage {
   return (
     isRecord(value) &&
     value.type === 'failed' &&
-    typeof value.jobId === 'string' &&
+    typeof value.reportInstanceId === 'string' &&
     typeof value.errorMessage === 'string'
   );
 }
 
-export class ReportJobRunner {
-  private readonly logger = new Logger(ReportJobRunner.name);
+export class ReportInstanceRunner {
+  private readonly logger = new Logger(ReportInstanceRunner.name);
 
   constructor(
-    private readonly jobStore: InMemoryReportJobStore,
-    private readonly generatedFileStore: GeneratedFileStore,
+    private readonly reportInstanceStore: FileSystemReportInstanceStore,
     private readonly datasetRotation: SimpleSalesSummaryXlsxDatasetRotation,
   ) {}
 
-  start(args: StartReportJobArgs): ReportJobAccepted {
-    const jobId = generateJobId();
+  async start(args: StartReportInstanceArgs): Promise<ReportLaunchAccepted> {
+    const reportInstanceId = generateReportInstanceId();
     const workerStartMessage: ParentStartMessage = {
       type: 'start',
-      jobId,
+      reportInstanceId,
       reportCode: args.reportCode,
       currentUser: args.currentUser,
       params: this.buildInternalParams(args.reportCode, args.params),
     };
 
-    this.jobStore.createQueuedJob({
-      jobId,
+    await this.reportInstanceStore.createQueuedInstance({
+      reportInstanceId,
       reportCode: args.reportCode,
     });
 
     try {
-      this.startWorker(jobId, workerStartMessage);
+      this.startWorker(reportInstanceId, workerStartMessage);
     } catch (error) {
-      this.jobStore.markFailed(jobId, toErrorMessage(error));
+      await this.reportInstanceStore.markFailed(reportInstanceId, toErrorMessage(error));
       this.logger.error(
-        `failed to start report worker id=${jobId} error=${toErrorMessage(error)}`,
+        `failed to start report instance id=${reportInstanceId} error=${toErrorMessage(error)}`,
       );
     }
 
-    const acceptedPayload = ReportJobAcceptedSchema.parse({
-      jobId,
+    const acceptedPayload = ReportLaunchAcceptedSchema.parse({
+      reportInstanceId,
       status: 'queued',
     });
 
@@ -194,23 +192,26 @@ export class ReportJobRunner {
     };
   }
 
-  private startWorker(jobId: string, startMessage: ParentStartMessage): void {
+  private startWorker(
+    reportInstanceId: string,
+    startMessage: ParentStartMessage,
+  ): void {
     const { workerPath, execArgv } = resolveWorkerLaunchConfig();
     const child = fork(workerPath, [], {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
       execArgv,
       serialization: 'advanced',
     });
-    let lifecycleState: JobLifecycleState = 'active';
+    let lifecycleState: InstanceLifecycleState = 'active';
 
-    const setFailed = (errorMessage: string) => {
+    const setFailed = async (errorMessage: string) => {
       if (lifecycleState === 'finalized') {
         return;
       }
 
       lifecycleState = 'finalized';
-      this.jobStore.markFailed(jobId, errorMessage);
-      this.logger.error(`report job failed id=${jobId} error=${errorMessage}`);
+      await this.reportInstanceStore.markFailed(reportInstanceId, errorMessage);
+      this.logger.error(`report instance failed id=${reportInstanceId} error=${errorMessage}`);
       removeListeners();
     };
 
@@ -228,10 +229,15 @@ export class ReportJobRunner {
           throw new Error('Worker returned invalid file bytes.');
         }
 
-        this.jobStore.markRunning(jobId);
-        this.jobStore.updateProgress(jobId, 'storing-result', 90);
+        await this.reportInstanceStore.markRunning(reportInstanceId);
+        await this.reportInstanceStore.updateProgress(
+          reportInstanceId,
+          'storing-result',
+          90,
+        );
 
-        const { fileId } = await this.generatedFileStore.save({
+        const artifact = await this.reportInstanceStore.saveArtifact({
+          reportInstanceId,
           fileName: message.fileName,
           mimeType: message.mimeType,
           bytes,
@@ -240,21 +246,24 @@ export class ReportJobRunner {
           kind: 'downloadable-file',
           fileName: message.fileName,
           byteLength: bytes.byteLength,
-          downloadUrl: `/generated-files/${fileId}`,
+          downloadUrl: `/generated-files/${artifact.artifactId}`,
         };
-        const parsedResult =
-          DownloadableFileResultSchema.safeParse(downloadableResult);
+        const parsedResult = DownloadableFileResultSchema.safeParse(downloadableResult);
 
         if (!parsedResult.success) {
           throw new Error('Invalid downloadable file result.');
         }
 
-        this.jobStore.markCompleted(jobId, parsedResult.data);
-        this.logger.log(`report job completed id=${jobId} stage=done`);
+        await this.reportInstanceStore.markCompleted(
+          reportInstanceId,
+          parsedResult.data,
+          artifact,
+        );
+        this.logger.log(`report instance completed id=${reportInstanceId} stage=done`);
         lifecycleState = 'finalized';
         removeListeners();
       } catch (error) {
-        setFailed(toErrorMessage(error));
+        await setFailed(toErrorMessage(error));
       }
     };
 
@@ -264,21 +273,27 @@ export class ReportJobRunner {
       }
 
       if (isProgressMessage(message)) {
-        if (message.jobId !== jobId || lifecycleState !== 'active') {
+        if (message.reportInstanceId !== reportInstanceId || lifecycleState !== 'active') {
           return;
         }
 
-        this.jobStore.markRunning(jobId);
-        this.jobStore.updateProgress(
-          jobId,
-          message.stage,
-          message.progressPercent,
-        );
+        void this.reportInstanceStore.markRunning(reportInstanceId).catch((error) => {
+          this.logger.error(
+            `failed to mark running id=${reportInstanceId} error=${toErrorMessage(error)}`,
+          );
+        });
+        void this.reportInstanceStore
+          .updateProgress(reportInstanceId, message.stage, message.progressPercent)
+          .catch((error) => {
+            this.logger.error(
+              `failed to update progress id=${reportInstanceId} error=${toErrorMessage(error)}`,
+            );
+          });
         return;
       }
 
       if (isCompletedMessage(message)) {
-        if (message.jobId !== jobId) {
+        if (message.reportInstanceId !== reportInstanceId) {
           return;
         }
 
@@ -287,16 +302,16 @@ export class ReportJobRunner {
       }
 
       if (isFailedMessage(message)) {
-        if (message.jobId !== jobId) {
+        if (message.reportInstanceId !== reportInstanceId) {
           return;
         }
 
-        setFailed(message.errorMessage);
+        void setFailed(message.errorMessage);
       }
     };
 
     const handleWorkerError = (error: Error) => {
-      setFailed(toErrorMessage(error));
+      void setFailed(toErrorMessage(error));
     };
 
     const handleWorkerExit = (code: number | null, signal: NodeJS.Signals | null) => {
@@ -304,14 +319,9 @@ export class ReportJobRunner {
         return;
       }
 
-      const detail =
-        code !== null
-          ? `code=${code}`
-          : signal
-            ? `signal=${signal}`
-            : 'unknown';
-
-      setFailed(`Report worker exited before completion (${detail}).`);
+      void setFailed(
+        `Worker exited before completion. code=${code ?? 'null'} signal=${signal ?? 'null'}`,
+      );
     };
 
     const removeListeners = () => {
@@ -323,10 +333,13 @@ export class ReportJobRunner {
     child.on('message', handleWorkerMessage);
     child.on('error', handleWorkerError);
     child.on('exit', handleWorkerExit);
+
     child.send(startMessage, (error) => {
-      if (error) {
-        setFailed(toErrorMessage(error));
+      if (!error) {
+        return;
       }
+
+      void setFailed(toErrorMessage(error));
     });
   }
 }

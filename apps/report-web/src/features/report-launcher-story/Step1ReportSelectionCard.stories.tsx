@@ -17,13 +17,11 @@ function InteractiveStep1Story({
 }: InteractiveProps) {
   const [selectedUserId, setSelectedUserId] = useState(initialUserId);
   const [selectedReportCode, setSelectedReportCode] = useState(initialReportCode);
-  const [searchValue, setSearchValue] = useState(initialSearchValue);
 
   useEffect(() => {
     setSelectedUserId(initialUserId);
     setSelectedReportCode(initialReportCode);
-    setSearchValue(initialSearchValue);
-  }, [initialUserId, initialReportCode, initialSearchValue]);
+  }, [initialUserId, initialReportCode]);
 
   return (
     <Step1ReportSelectionCard
@@ -31,9 +29,8 @@ function InteractiveStep1Story({
       reports={mockReportSelectionItems}
       selectedUserId={selectedUserId}
       selectedReportCode={selectedReportCode}
-      searchValue={searchValue}
+      initialSearchValue={initialSearchValue}
       onUserChange={setSelectedUserId}
-      onSearchChange={setSearchValue}
       onSelectReport={setSelectedReportCode}
     />
   );

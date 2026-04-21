@@ -22,25 +22,20 @@ import {
   type SharedSettingsProvider,
 } from '@report-platform/external-api';
 import {
-  GENERATED_FILE_STORE_TOKEN,
-  InMemoryGeneratedFileStore,
-  type GeneratedFileStore,
-} from '@report-platform/file-store';
-import {
   SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS,
   InMemorySimpleSalesSummaryXlsxDatasetRotation,
   type SimpleSalesSummaryXlsxDatasetRotation,
 } from '@report-definitions/simple-sales-summary-xlsx';
 
-import { ReportJobRunner } from './report-job.runner';
-import { InMemoryReportJobStore } from './report-job.store';
+import { ReportInstanceRunner } from './report-instance.runner';
+import { FileSystemReportInstanceStore } from './report-instance.store';
 import { createReportRegistry } from './report-registry.factory';
 
 export const REPORT_REGISTRY_TOKEN = 'REPORT_REGISTRY_TOKEN';
 export const SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN =
   'SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN';
-export const REPORT_JOB_STORE_TOKEN = 'REPORT_JOB_STORE_TOKEN';
-export const REPORT_JOB_RUNNER_TOKEN = 'REPORT_JOB_RUNNER_TOKEN';
+export const REPORT_INSTANCE_STORE_TOKEN = 'REPORT_INSTANCE_STORE_TOKEN';
+export const REPORT_INSTANCE_RUNNER_TOKEN = 'REPORT_INSTANCE_RUNNER_TOKEN';
 
 export const reportingProviders: Provider[] = [
   {
@@ -78,25 +73,19 @@ export const reportingProviders: Provider[] = [
     ): ExternalClientFactory => new ExternalClientFactory(sharedSettingsProvider),
   },
   {
-    provide: GENERATED_FILE_STORE_TOKEN,
-    useFactory: () => new InMemoryGeneratedFileStore(),
+    provide: REPORT_INSTANCE_STORE_TOKEN,
+    useFactory: () => new FileSystemReportInstanceStore(),
   },
   {
-    provide: REPORT_JOB_STORE_TOKEN,
-    useFactory: () => new InMemoryReportJobStore(),
-  },
-  {
-    provide: REPORT_JOB_RUNNER_TOKEN,
+    provide: REPORT_INSTANCE_RUNNER_TOKEN,
     inject: [
-      REPORT_JOB_STORE_TOKEN,
-      GENERATED_FILE_STORE_TOKEN,
+      REPORT_INSTANCE_STORE_TOKEN,
       SIMPLE_SALES_SUMMARY_XLSX_DATASET_ROTATION_TOKEN,
     ],
     useFactory: (
-      reportJobStore: InMemoryReportJobStore,
-      generatedFileStore: GeneratedFileStore,
+      reportInstanceStore: FileSystemReportInstanceStore,
       datasetRotation: SimpleSalesSummaryXlsxDatasetRotation,
-    ) => new ReportJobRunner(reportJobStore, generatedFileStore, datasetRotation),
+    ) => new ReportInstanceRunner(reportInstanceStore, datasetRotation),
   },
   {
     provide: REPORT_REGISTRY_TOKEN,

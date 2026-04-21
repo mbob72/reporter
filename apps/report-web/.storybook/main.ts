@@ -7,6 +7,9 @@ import { reportWebAliases } from '../vite.aliases';
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   addons: ['@storybook/addon-essentials', '@storybook/addon-interactions'],
+  typescript: {
+    reactDocgen: false,
+  },
   framework: {
     name: '@storybook/react-vite',
     options: {},

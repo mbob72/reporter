@@ -19,15 +19,12 @@ import {
 import type { SharedSettingsProvider } from '@report-platform/external-api';
 import { SHARED_SETTINGS_PROVIDER_TOKEN } from '@report-platform/external-api';
 import {
-  GENERATED_FILE_STORE_TOKEN,
-  type GeneratedFileStore,
-} from '@report-platform/file-store';
-import {
   getAllTenants,
   getOrganizationsByTenant,
 } from '@report-platform/data-access';
 import {
   LaunchReportBodySchema,
+  ReportInstanceListResponseSchema,
   ReportMetadataSchema,
   ReportListResponseSchema,
   SharedSettingOptionListSchema,
@@ -36,9 +33,11 @@ import type { ApiError } from '@report-platform/contracts';
 import { ReportRegistry } from '@report-platform/registry';
 
 import { hasRoleAccess, toHttpException } from './report-http.helpers';
-import { ReportJobRunner } from './report-job.runner';
+import { ReportInstanceRunner } from './report-instance.runner';
+import { FileSystemReportInstanceStore } from './report-instance.store';
 import {
-  REPORT_JOB_RUNNER_TOKEN,
+  REPORT_INSTANCE_RUNNER_TOKEN,
+  REPORT_INSTANCE_STORE_TOKEN,
   REPORT_REGISTRY_TOKEN,
 } from './reporting.providers';
 
@@ -55,10 +54,10 @@ export class ReportsController {
     private readonly reportRegistry: ReportRegistry,
     @Inject(SHARED_SETTINGS_PROVIDER_TOKEN)
     private readonly sharedSettingsProvider: SharedSettingsProvider,
-    @Inject(GENERATED_FILE_STORE_TOKEN)
-    private readonly generatedFileStore: GeneratedFileStore,
-    @Inject(REPORT_JOB_RUNNER_TOKEN)
-    private readonly reportJobRunner: ReportJobRunner,
+    @Inject(REPORT_INSTANCE_STORE_TOKEN)
+    private readonly reportInstanceStore: FileSystemReportInstanceStore,
+    @Inject(REPORT_INSTANCE_RUNNER_TOKEN)
+    private readonly reportInstanceRunner: ReportInstanceRunner,
   ) {}
 
   @Get('reports')
@@ -244,11 +243,50 @@ export class ReportsController {
         `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
       );
 
-      return this.reportJobRunner.start({
+      return await this.reportInstanceRunner.start({
         reportCode,
         currentUser,
         params: parsedBody.data.params,
       });
+    } catch (error) {
+      throw toHttpException(error);
+    }
+  }
+
+  @Get('reports/:reportCode/instances')
+  @HttpCode(200)
+  async listReportInstancesByReportCode(@Param('reportCode') reportCode: string) {
+    try {
+      const reportDefinition = this.reportRegistry.getReport(reportCode);
+
+      if (!reportDefinition) {
+        throw {
+          code: 'NOT_FOUND',
+          message: `Unknown report: ${reportCode}`,
+        } satisfies ApiError;
+      }
+
+      const instances = await this.reportInstanceStore.listByReportCode(reportCode);
+      const payload = instances.map((instance) => ({
+        id: instance.id,
+        reportCode: instance.reportCode,
+        status: instance.status,
+        createdAt: instance.createdAt,
+        finishedAt: instance.finishedAt,
+        fileName: instance.fileName,
+        byteLength: instance.byteLength,
+        downloadUrl:
+          instance.status === 'completed' && instance.artifactId
+            ? `/generated-files/${instance.artifactId}`
+            : undefined,
+      }));
+      const parsedResponse = ReportInstanceListResponseSchema.safeParse(payload);
+
+      if (!parsedResponse.success) {
+        throw new Error('Invalid report instances payload.');
+      }
+
+      return parsedResponse.data;
     } catch (error) {
       throw toHttpException(error);
     }
@@ -261,7 +299,7 @@ export class ReportsController {
     @Res() res: any,
   ) {
     try {
-      const storedFile = await this.generatedFileStore.get(fileId);
+      const storedFile = await this.reportInstanceStore.getArtifact(fileId);
 
       if (!storedFile) {
         throw {

@@ -9,5 +9,11 @@ export function buildReportList(
     code: reportDefinition.code,
     title: reportDefinition.title,
     description: reportDefinition.description,
+    minRoleToLaunch: reportDefinition.getMetadata({
+      userId: 'report-list-system',
+      role: 'Admin',
+      tenantId: null,
+      organizationId: null,
+    }).minRoleToLaunch,
   }));
 }

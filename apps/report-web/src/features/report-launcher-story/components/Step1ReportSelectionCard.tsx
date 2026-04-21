@@ -12,15 +12,15 @@ import {
 } from '@mantine/core';
 
 import type { LauncherUser, ReportSelectionItem, UnavailableReportReason } from '../types';
+import { useResettableState } from '../hooks/useResettableState';
 
 type Step1ReportSelectionCardProps = {
   users: LauncherUser[];
   reports: ReportSelectionItem[];
   selectedUserId: string;
   selectedReportCode: string;
-  searchValue: string;
+  initialSearchValue?: string;
   onUserChange?: (userId: string) => void;
-  onSearchChange?: (searchValue: string) => void;
   onSelectReport?: (reportCode: string) => void;
 };
 
@@ -47,11 +47,11 @@ export function Step1ReportSelectionCard({
   reports,
   selectedUserId,
   selectedReportCode,
-  searchValue,
+  initialSearchValue = '',
   onUserChange,
-  onSearchChange,
   onSelectReport,
 }: Step1ReportSelectionCardProps) {
+  const [searchValue, setSearchValue] = useResettableState(initialSearchValue);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
 
   const filteredReports = reports.filter((report) =>
@@ -99,7 +99,7 @@ export function Step1ReportSelectionCard({
             label="Search by report name"
             placeholder="Type report name"
             value={searchValue}
-            onChange={(event) => onSearchChange?.(event.currentTarget.value)}
+            onChange={(event) => setSearchValue(event.currentTarget.value)}
           />
         </Group>
 

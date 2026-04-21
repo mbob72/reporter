@@ -4,6 +4,6 @@ export * from './error.contract';
 export * from './downloadable-file.contract';
 export * from './report-list.contract';
 export * from './report-launch.contract';
-export * from './report-job.contract';
+export * from './report-instance.contract';
 export * from './report-metadata.contract';
 export * from './shared-settings.contract';

@@ -13,7 +13,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import type { CredentialsMode, LaunchConfigurationModel } from '../types';
 
@@ -24,9 +24,25 @@ export type LaunchSubmitPayload = {
   parameters: Record<string, string>;
 };
 
+export type Step2ScopeOptions = {
+  selectedTenantId: string;
+  tenantOptions: Array<{ value: string; label: string }>;
+  onTenantChange?: (tenantId: string) => void;
+  selectedOrganizationId: string;
+  organizationOptions: Array<{ value: string; label: string }>;
+  onOrganizationChange?: (organizationId: string) => void;
+  organizationsLoading?: boolean;
+};
+
 type Step2LaunchConfigurationCardProps = {
   configuration: LaunchConfigurationModel;
   onLaunch?: (payload: LaunchSubmitPayload) => void;
+  scope?: Step2ScopeOptions;
+  isLaunching?: boolean;
+  onCredentialModeChange?: (mode: CredentialsMode) => void;
+  onManualApiKeyChange?: (value: string) => void;
+  onSharedSettingChange?: (sharedSettingId: string) => void;
+  onParameterChange?: (key: string, value: string) => void;
 };
 
 type LaunchFormValues = {
@@ -48,10 +64,32 @@ function getSeverityColor(severity: 'info' | 'warning' | 'critical') {
   return 'blue';
 }
 
+function areParameterValuesEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return rightKeys.every((key) => left[key] === right[key]);
+}
+
 export function Step2LaunchConfigurationCard({
   configuration,
   onLaunch,
+  scope,
+  isLaunching = false,
+  onCredentialModeChange,
+  onManualApiKeyChange,
+  onSharedSettingChange,
+  onParameterChange,
 }: Step2LaunchConfigurationCardProps) {
+  const lastForcedValidationMessageRef = useRef<string | null>(null);
+
   const initialParameters = configuration.parameterFields.reduce<Record<string, string>>(
     (acc, field) => {
       acc[field.key] = field.value ?? '';
@@ -68,14 +106,71 @@ export function Step2LaunchConfigurationCard({
       parameters: initialParameters,
     },
   });
+  const parameterFieldSignature = JSON.stringify(
+    configuration.parameterFields.map((field) => [field.key, field.value ?? '']),
+  );
 
-  useEffect(() => {
-    if (configuration.forcedValidationMessage) {
-      form.setFieldError('manualApiKey', configuration.forcedValidationMessage);
+  useEffect(function syncFormValuesFromConfigurationEffect() {
+    const nextParameters = configuration.parameterFields.reduce<Record<string, string>>(
+      (acc, field) => {
+        acc[field.key] = field.value ?? '';
+        return acc;
+      },
+      {},
+    );
+
+    const nextCredentialMode = configuration.credentials.defaultMode;
+    const nextManualApiKey = configuration.credentials.manualApiKey ?? '';
+    const nextSharedSettingId =
+      configuration.credentials.selectedSharedSettingId ?? '';
+
+    if (form.values.credentialMode !== nextCredentialMode) {
+      form.setFieldValue('credentialMode', nextCredentialMode);
+    }
+
+    if (form.values.manualApiKey !== nextManualApiKey) {
+      form.setFieldValue('manualApiKey', nextManualApiKey);
+    }
+
+    if (form.values.sharedSettingId !== nextSharedSettingId) {
+      form.setFieldValue('sharedSettingId', nextSharedSettingId);
+    }
+
+    if (!areParameterValuesEqual(form.values.parameters, nextParameters)) {
+      form.setFieldValue('parameters', nextParameters);
+    }
+  }, [
+    configuration.credentials.defaultMode,
+    configuration.credentials.manualApiKey,
+    configuration.credentials.selectedSharedSettingId,
+    parameterFieldSignature,
+    configuration.reportCode,
+    form.values.credentialMode,
+    form.values.manualApiKey,
+    form.values.sharedSettingId,
+    form.values.parameters,
+  ]);
+
+  useEffect(function syncForcedValidationMessageEffect() {
+    const forcedValidationMessage = configuration.forcedValidationMessage ?? null;
+    const previousForcedValidationMessage = lastForcedValidationMessageRef.current;
+
+    if (forcedValidationMessage) {
+      if (form.errors.manualApiKey !== forcedValidationMessage) {
+        form.setFieldError('manualApiKey', forcedValidationMessage);
+      }
+      lastForcedValidationMessageRef.current = forcedValidationMessage;
       return;
     }
 
-    form.clearFieldError('manualApiKey');
+    if (
+      previousForcedValidationMessage &&
+      form.errors.manualApiKey === previousForcedValidationMessage
+    ) {
+      form.clearFieldError('manualApiKey');
+    }
+
+    lastForcedValidationMessageRef.current = null;
   }, [configuration.forcedValidationMessage]);
 
   const handleSubmit = form.onSubmit((values) => {
@@ -165,6 +260,42 @@ export function Step2LaunchConfigurationCard({
             </Stack>
           </Paper>
 
+          {scope ? (
+            <Paper withBorder radius="md" p="md" className="bg-white/80">
+              <Stack gap="sm">
+                <Text fw={700}>Access Scope</Text>
+                <Select
+                  label="Tenant"
+                  value={scope.selectedTenantId}
+                  data={scope.tenantOptions}
+                  onChange={(nextValue) => {
+                    if (!nextValue) {
+                      return;
+                    }
+
+                    scope.onTenantChange?.(nextValue);
+                  }}
+                />
+                <Select
+                  label="Organization"
+                  value={scope.selectedOrganizationId}
+                  data={scope.organizationOptions}
+                  disabled={scope.organizationOptions.length === 0}
+                  description={
+                    scope.organizationsLoading
+                      ? 'Loading organizations...'
+                      : scope.organizationOptions.length === 0
+                        ? 'No organizations available for selected tenant.'
+                        : undefined
+                  }
+                  onChange={(nextValue) => {
+                    scope.onOrganizationChange?.(nextValue ?? '');
+                  }}
+                />
+              </Stack>
+            </Paper>
+          ) : null}
+
           <Paper withBorder radius="md" p="md" className="bg-white/80">
             <Stack gap="sm">
               <Text fw={700}>Constraints / Access Explanation</Text>
@@ -205,9 +336,11 @@ export function Step2LaunchConfigurationCard({
                   disabled={field.disabled}
                   description={field.helperText}
                   error={form.errors[`parameters.${field.key}`]}
-                  onChange={(event) =>
-                    form.setFieldValue(`parameters.${field.key}`, event.currentTarget.value)
-                  }
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget.value;
+                    form.setFieldValue(`parameters.${field.key}`, nextValue);
+                    onParameterChange?.(field.key, nextValue);
+                  }}
                 />
               ))}
             </Stack>
@@ -218,13 +351,19 @@ export function Step2LaunchConfigurationCard({
               <Text fw={700}>Credentials</Text>
               <Radio.Group
                 value={form.values.credentialMode}
-                onChange={(nextValue) =>
-                  form.setFieldValue('credentialMode', nextValue as CredentialsMode)
-                }
+                onChange={(nextValue) => {
+                  const mode = nextValue as CredentialsMode;
+                  form.setFieldValue('credentialMode', mode);
+                  onCredentialModeChange?.(mode);
+                }}
               >
                 <Stack gap={8}>
                   <Radio value="manual" label={configuration.credentials.manualLabel} />
-                  <Radio value="shared_setting" label={configuration.credentials.sharedLabel} />
+                  <Radio
+                    value="shared_setting"
+                    label={configuration.credentials.sharedLabel}
+                    disabled={configuration.credentials.sharedModeDisabled}
+                  />
                 </Stack>
               </Radio.Group>
 
@@ -234,9 +373,11 @@ export function Step2LaunchConfigurationCard({
                   placeholder="ow-live-..."
                   value={form.values.manualApiKey}
                   error={form.errors.manualApiKey}
-                  onChange={(event) =>
-                    form.setFieldValue('manualApiKey', event.currentTarget.value)
-                  }
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget.value;
+                    form.setFieldValue('manualApiKey', nextValue);
+                    onManualApiKeyChange?.(nextValue);
+                  }}
                 />
               ) : (
                 <Select
@@ -246,15 +387,25 @@ export function Step2LaunchConfigurationCard({
                     value: setting.id,
                     label: setting.label,
                   }))}
+                  disabled={
+                    configuration.credentials.sharedSettingsLoading ||
+                    configuration.credentials.sharedSettings.length === 0
+                  }
                   description={
-                    configuration.credentials.sharedSettings.find(
-                      (setting) => setting.id === form.values.sharedSettingId,
-                    )?.description ?? 'Select a shared setting'
+                    configuration.credentials.sharedSettingsLoading
+                      ? 'Loading shared settings...'
+                      : configuration.credentials.sharedSettings.find(
+                            (setting) => setting.id === form.values.sharedSettingId,
+                          )?.description ??
+                        configuration.credentials.sharedSettingsEmptyReason ??
+                        'Select a shared setting'
                   }
                   error={form.errors.sharedSettingId}
-                  onChange={(nextValue) =>
-                    form.setFieldValue('sharedSettingId', nextValue ?? '')
-                  }
+                  onChange={(nextValue) => {
+                    const nextValueNormalized = nextValue ?? '';
+                    form.setFieldValue('sharedSettingId', nextValueNormalized);
+                    onSharedSettingChange?.(nextValueNormalized);
+                  }}
                 />
               )}
             </Stack>
@@ -269,10 +420,10 @@ export function Step2LaunchConfigurationCard({
           <Group justify="flex-end" className="w-full">
             <Button
               type="submit"
-              disabled={!configuration.canLaunch}
+              disabled={isLaunching || !configuration.canLaunch}
               className="w-full sm:w-auto"
             >
-              Launch
+              {isLaunching ? 'Launching...' : 'Launch'}
             </Button>
           </Group>
         </Stack>
