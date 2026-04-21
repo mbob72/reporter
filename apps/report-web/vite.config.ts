@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 import { reportWebAliases } from './vite.aliases';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
@@ -11,6 +11,12 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: reportWebAliases,
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.spec.ts', 'src/**/*.spec.tsx'],
+    clearMocks: true,
   },
   server: {
     host: '127.0.0.1',

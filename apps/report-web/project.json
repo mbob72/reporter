@@ -21,6 +21,12 @@
       "options": {
         "command": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook build -c apps/report-web/.storybook -o dist/storybook/report-web"
       }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --config apps/report-web/vite.config.ts"
+      }
     }
   },
   "tags": []

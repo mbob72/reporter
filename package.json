@@ -7,6 +7,8 @@
     "start:api": "tsx watch --tsconfig apps/report-api/tsconfig.json apps/report-api/src/main.ts",
     "start:web": "vite --config apps/report-web/vite.config.ts",
     "star:web": "vite --config apps/report-web/vite.config.ts",
+    "test:report-web": "vitest run --config apps/report-web/vite.config.ts",
+    "test:report-web:watch": "vitest --config apps/report-web/vite.config.ts",
     "storybook:report-web": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook dev -p 4401 -c apps/report-web/.storybook",
     "build-storybook:report-web": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook build -c apps/report-web/.storybook -o dist/storybook/report-web"
   },
@@ -18,16 +20,19 @@
     "@storybook/addon-interactions": "^8.6.14",
     "@storybook/react": "8.6.14",
     "@storybook/react-vite": "^8.6.14",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^18.19.87",
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",
     "autoprefixer": "^10.4.19",
+    "jsdom": "^29.0.2",
     "nx": "22.6.5",
     "postcss": "^8.4.38",
     "storybook": "^8.6.14",
     "tailwindcss": "^3.4.17",
     "tsx": "^3.12.7",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^0.34.6"
   },
   "dependencies": {
     "@mantine/core": "^8.3.6",
