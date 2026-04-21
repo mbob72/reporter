@@ -236,3 +236,89 @@ pnpm start:api
 - реальной auth/session модели,
 - object storage (S3/MinIO),
 - фонового процессинга с устойчивой очередью и retry-policy.
+
+## 11. Frontend: основной сценарий launcher + stepper
+
+Этот раздел описывает фронтовый пользовательский поток и дает ревьюеру карту ключевых файлов.
+
+### 11.1 Router и URL как источник состояния шага
+
+Маршруты сценария:
+
+- `/report-launch` — шаг 1 (выбор отчета)
+- `/report-launch/configure` — шаг 2 (конфигурация запуска)
+- `/report-runs/:reportInstanceId` — шаг 3 (прогресс)
+- `/report-runs/:reportInstanceId/result` — шаг 4 (результат)
+
+Код:
+
+- [Router definitions (`appRoutes`)](apps/report-web/src/app/router/router.tsx)
+- [Stepper shell + active step от pathname](apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx)
+
+### 11.2 Шаг 1: выбор типа отчета + ready instances
+
+Что делает шаг:
+
+- Загружает список типов отчетов (`GET /reports`).
+- Для выбранного `reportCode` загружает историю запусков (`GET /reports/:reportCode/instances`).
+- Показывает:
+  - список report types (с поиском и role-based availability),
+  - список готовых инстансов выбранного отчета (ready instances) с download links при наличии прав.
+- При недостаточных правах показывает только count готовых инстансов без ссылок.
+- Переход на шаг 2 доступен только когда выбран доступный отчет.
+
+Код:
+
+- [Step1 container (data mapping + access gating)](apps/report-web/src/features/report-launcher-runtime/containers/Step1ReportSelectionContainer.tsx)
+- [Step1 UI card (reports + ready instances)](apps/report-web/src/features/report-launcher-story/components/Step1ReportSelectionCard.tsx)
+- [RTK Query API endpoints](apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts)
+- [Role check helper](apps/report-web/src/features/report-launcher-runtime/lib/access.ts)
+
+### 11.3 Шаг 2: специфичная конфигурация запуска для каждого отчета
+
+Что делает шаг:
+
+- Строит launch-модель на основе выбранного отчета, metadata и runtime state.
+- Поддерживает report-specific UX: общий каркас одинаковый, но содержимое блоков может отличаться по `reportCode`.
+- Поля credentials отображаются только если у отчета есть `externalDependency`.
+- По submit формирует `launch params`, сохраняет launch snapshot в store и вызывает `POST /reports/:reportCode/launch`.
+- После успешного launch делает переход на шаг 3: `/report-runs/:reportInstanceId`.
+
+Код:
+
+- [Step2 container (hooks composition)](apps/report-web/src/features/report-launcher-runtime/containers/Step2LaunchConfigurationContainer.tsx)
+- [Step2 view model (constraints, fields, credentials)](apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchConfigurationViewModel.ts)
+- [Step2 actions (launch submit + navigation)](apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchActions.ts)
+- [Step2 UI card (`renderReportSpecificBlocks`)](apps/report-web/src/features/report-launcher-story/components/Step2LaunchConfigurationCard.tsx)
+
+### 11.4 Шаг 3: прогресс выполнения
+
+Что делает шаг:
+
+- Пуллит `GET /report-runs/:reportInstanceId` (интервал 1s).
+- Маппит backend-статус/стейдж в UI timeline и diagnostics.
+- При `completed` автоматически переводит на `/report-runs/:reportInstanceId/result`.
+
+Код:
+
+- [Step3 container (polling + redirect)](apps/report-web/src/features/report-launcher-runtime/containers/Step3RunProgressContainer.tsx)
+- [Step3 UI card](apps/report-web/src/features/report-launcher-story/components/Step3RunProgressCard.tsx)
+
+### 11.5 Шаг 4: результат + история ранее сгенерированных
+
+Что делает шаг:
+
+- Загружает текущий instance и строит primary artifact.
+- Загружает список запусков того же `reportCode` и показывает recent artifacts.
+- Обрабатывает прямое открытие `/result`: если запуск не завершен, редиректит на шаг прогресса.
+
+Код:
+
+- [Step4 container (result model + guards)](apps/report-web/src/features/report-launcher-runtime/containers/Step4ResultContainer.tsx)
+- [Step4 UI card](apps/report-web/src/features/report-launcher-story/components/Step4ResultCard.tsx)
+
+### 11.6 Общие UI/state точки для ревью
+
+- [Shared footer actions (Back/Launch/Run again и т.п.)](apps/report-web/src/features/report-launcher-story/components/StepFooterActions.tsx)
+- [Launcher slice (selected report/context/credentials/snapshot)](apps/report-web/src/features/report-launcher-runtime/store/launcherSlice.ts)
+- [Session slice (mock user)](apps/report-web/src/features/report-launcher-runtime/store/sessionSlice.ts)
