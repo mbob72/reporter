@@ -145,10 +145,6 @@ export function Step2LaunchConfigurationCard({
     configuration.credentials.selectedSharedSettingId,
     parameterFieldSignature,
     configuration.reportCode,
-    form.values.credentialMode,
-    form.values.manualApiKey,
-    form.values.sharedSettingId,
-    form.values.parameters,
   ]);
 
   useEffect(function syncForcedValidationMessageEffect() {
