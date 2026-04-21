@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Stack } from '@mantine/core';
+import { Alert, Stack } from '@mantine/core';
 
 import { Step2LaunchConfigurationCard } from '../../report-launcher-story/components/Step2LaunchConfigurationCard';
 import { toUiErrorMessage } from '../lib/toUiErrorMessage';
@@ -21,7 +21,7 @@ export function Step2LaunchConfigurationContainer() {
     externalDependencyServiceKey: step2Queries.externalDependency?.serviceKey,
   });
 
-  const { launchConfiguration, scope } = useStep2LaunchConfigurationViewModel({
+  const { launchConfiguration } = useStep2LaunchConfigurationViewModel({
     selectedReport: step2Queries.selectedReport,
     metadata: step2Queries.metadataQuery.data,
     metadataLoading: step2Queries.metadataQuery.isLoading,
@@ -33,20 +33,15 @@ export function Step2LaunchConfigurationContainer() {
       step2Queries.sharedSettingsQuery.isFetching ||
       step2Queries.sharedSettingsQuery.isLoading,
     isLaunching: step2Actions.launchReportMutationState.isLoading,
-    tenantOptions: step2Queries.tenantsQuery.data ?? [],
-    organizationOptions: step2Queries.organizationsQuery.data ?? [],
-    organizationsLoading: step2Queries.organizationsQuery.isFetching,
-    onTenantChange: step2Actions.handleTenantChange,
-    onOrganizationChange: step2Actions.handleOrganizationChange,
   });
 
   return (
-    <Stack gap="md" pt="md">
+    <Stack gap="md" pt="md" className="h-full min-h-0">
       <Step2LaunchConfigurationCard
         key={launchConfiguration.reportCode}
         configuration={launchConfiguration}
-        scope={scope}
         isLaunching={step2Actions.launchReportMutationState.isLoading}
+        onBackToReports={step2Actions.handleBackToReportsClick}
         onCredentialModeChange={step2Actions.handleCredentialModeChange}
         onManualApiKeyChange={step2Actions.handleManualApiKeyChange}
         onSharedSettingChange={step2Actions.handleSharedSettingChange}
@@ -89,16 +84,6 @@ export function Step2LaunchConfigurationContainer() {
           {step2Actions.launchError}
         </Alert>
       ) : null}
-
-      <Group justify="space-between" className="w-full">
-        <Button
-          variant="default"
-          onClick={step2Actions.handleBackToReportsClick}
-          className="w-full sm:w-auto"
-        >
-          Back to reports
-        </Button>
-      </Group>
     </Stack>
   );
 }

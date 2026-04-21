@@ -192,4 +192,27 @@ describe('Step2LaunchConfigurationCard', () => {
     expect(onCredentialModeChange).toHaveBeenCalledWith('shared_setting');
     expect(onLaunch).not.toHaveBeenCalled();
   });
+
+  it('calls back handler when clicking Back to reports', () => {
+    const onBackToReports = vi.fn();
+    const configuration = createConfiguration();
+
+    renderComponent(configuration, { onBackToReports });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to reports' }));
+
+    expect(onBackToReports).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render credentials block for report without external dependency', () => {
+    const configuration = createConfiguration({
+      reportCode: 'simple-sales-summary-xlsx',
+      externalDependency: undefined,
+      parameterFields: [],
+    });
+
+    renderComponent(configuration);
+
+    expect(screen.queryByText('Credentials')).toBeNull();
+    expect(screen.queryByLabelText('OpenWeather API key')).toBeNull();
+  });
 });

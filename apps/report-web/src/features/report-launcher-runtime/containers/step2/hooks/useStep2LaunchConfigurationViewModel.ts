@@ -11,15 +11,10 @@ import type {
 } from '@report-platform/contracts';
 
 import { useAppSelector } from '../../../../../app/hooks';
-import type { Step2ScopeOptions } from '../../../../report-launcher-story/components/Step2LaunchConfigurationCard';
 import type {
   LaunchConfigurationModel,
   SharedSettingOption as SharedSettingViewOption,
 } from '../../../../report-launcher-story/types';
-import type {
-  OrganizationOption,
-  TenantOption,
-} from '../../../api/reportApi';
 import { hasRoleAccess } from '../../../lib/access';
 
 type UseStep2LaunchConfigurationViewModelParams = {
@@ -32,11 +27,6 @@ type UseStep2LaunchConfigurationViewModelParams = {
   sharedSettings: SharedSettingOption[];
   sharedSettingsLoading: boolean;
   isLaunching: boolean;
-  tenantOptions: TenantOption[];
-  organizationOptions: OrganizationOption[];
-  organizationsLoading: boolean;
-  onTenantChange: (tenantId: string) => void;
-  onOrganizationChange: (organizationId: string) => void;
 };
 
 function formatContextSummary(params: {
@@ -58,11 +48,6 @@ export function useStep2LaunchConfigurationViewModel({
   sharedSettings,
   sharedSettingsLoading,
   isLaunching,
-  tenantOptions,
-  organizationOptions,
-  organizationsLoading,
-  onTenantChange,
-  onOrganizationChange,
 }: UseStep2LaunchConfigurationViewModelParams) {
   const selectedMockUserId = useAppSelector((state) => state.session.selectedMockUserId);
   const selectedReportCode = useAppSelector((state) => state.launcher.selectedReportCode);
@@ -252,37 +237,7 @@ export function useStep2LaunchConfigurationViewModel({
     ],
   );
 
-  const scope: Step2ScopeOptions = useMemo(
-    function buildStep2ScopeOptions() {
-      return {
-        selectedTenantId,
-        tenantOptions: tenantOptions.map((tenantOption) => ({
-          value: tenantOption.id,
-          label: tenantOption.name,
-        })),
-        onTenantChange,
-        selectedOrganizationId,
-        organizationOptions: organizationOptions.map((organizationOption) => ({
-          value: organizationOption.id,
-          label: organizationOption.name,
-        })),
-        onOrganizationChange,
-        organizationsLoading,
-      };
-    },
-    [
-      selectedTenantId,
-      tenantOptions,
-      onTenantChange,
-      selectedOrganizationId,
-      organizationOptions,
-      onOrganizationChange,
-      organizationsLoading,
-    ],
-  );
-
   return {
     launchConfiguration,
-    scope,
   };
 }

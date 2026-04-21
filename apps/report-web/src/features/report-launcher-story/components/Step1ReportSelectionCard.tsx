@@ -1,27 +1,49 @@
 import {
+  Anchor,
   Badge,
+  Button,
   Card,
   Group,
   Paper,
   Select,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
   Title,
 } from '@mantine/core';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { LauncherUser, ReportSelectionItem, UnavailableReportReason } from '../types';
 import { useResettableState } from '../hooks/useResettableState';
+import { StepFooterActions } from './StepFooterActions';
+
+type ReadyReportInstanceItem = {
+  id: string;
+  label: string;
+  downloadHref?: string;
+  createdAtLabel: string;
+  finishedAtLabel: string;
+  sizeLabel: string;
+};
+
+type ReadyReportInstancesSummary = {
+  count: number;
+  canOpenLinks: boolean;
+  isLoading?: boolean;
+  items: ReadyReportInstanceItem[];
+};
 
 type Step1ReportSelectionCardProps = {
   users: LauncherUser[];
   reports: ReportSelectionItem[];
   selectedUserId: string;
   selectedReportCode: string;
+  readyInstances?: ReadyReportInstancesSummary;
+  canContinueToLaunchConfig?: boolean;
   initialSearchValue?: string;
   onUserChange?: (userId: string) => void;
   onSelectReport?: (reportCode: string) => void;
+  onContinueToLaunchConfig?: () => void;
 };
 
 const unavailableReasonLabel: Record<UnavailableReportReason, string> = {
@@ -29,6 +51,7 @@ const unavailableReasonLabel: Record<UnavailableReportReason, string> = {
   tenant_scope_required: 'Нужен tenant scope',
   organization_scope_required: 'Нужен organization scope',
 };
+const summaryInfoCardClassName = 'bg-slate-50 h-36 overflow-hidden';
 
 function getAvailabilityBadge(report: ReportSelectionItem, isSelected: boolean) {
   if (isSelected) {
@@ -47,25 +70,53 @@ export function Step1ReportSelectionCard({
   reports,
   selectedUserId,
   selectedReportCode,
+  readyInstances,
+  canContinueToLaunchConfig = false,
   initialSearchValue = '',
   onUserChange,
   onSelectReport,
+  onContinueToLaunchConfig,
 }: Step1ReportSelectionCardProps) {
   const [searchValue, setSearchValue] = useResettableState(initialSearchValue);
+  const [selectedReadyInstanceId, setSelectedReadyInstanceId] = useState<string | null>(null);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
 
   const filteredReports = reports.filter((report) =>
     report.name.toLowerCase().includes(searchValue.trim().toLowerCase()),
   );
+  const selectedReadyInstance = useMemo(
+    () =>
+      readyInstances?.items.find((instance) => instance.id === selectedReadyInstanceId) ??
+      null,
+    [readyInstances?.items, selectedReadyInstanceId],
+  );
+
+  useEffect(() => {
+    if (
+      !readyInstances ||
+      !readyInstances.canOpenLinks ||
+      readyInstances.items.length === 0
+    ) {
+      setSelectedReadyInstanceId(null);
+      return;
+    }
+
+    if (
+      !selectedReadyInstanceId ||
+      !readyInstances.items.some((instance) => instance.id === selectedReadyInstanceId)
+    ) {
+      setSelectedReadyInstanceId(readyInstances.items[0].id);
+    }
+  }, [readyInstances, selectedReadyInstanceId]);
 
   return (
     <Card
       withBorder
       radius="lg"
       p={0}
-      className="w-full max-w-5xl mx-auto bg-surface shadow-panel"
+      className="h-full min-h-0 w-full max-w-5xl mx-auto bg-surface shadow-panel flex flex-col"
     >
-      <Stack gap="lg" className="p-4 sm:p-6">
+      <Stack gap="lg" className="h-full min-h-0 p-4 sm:p-6">
         <Group justify="space-between" align="flex-start" wrap="wrap" className="gap-2">
           <div>
             <Text tt="uppercase" fw={700} size="xs" c="dimmed">
@@ -81,7 +132,7 @@ export function Step1ReportSelectionCard({
           </Badge>
         </Group>
 
-        <Group grow align="end" className="gap-3">
+        <Group align="end" className="gap-3">
           <Select
             label="Select mock user"
             value={selectedUserId}
@@ -94,95 +145,254 @@ export function Step1ReportSelectionCard({
                 onUserChange(nextValue);
               }
             }}
-          />
-          <TextInput
-            label="Search by report name"
-            placeholder="Type report name"
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.currentTarget.value)}
+            className="w-full md:max-w-sm"
           />
         </Group>
 
-        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-          <Paper withBorder radius="md" p="md" className="bg-white/80">
-            <Stack gap={8}>
-              <Text fw={700}>Launch Context Preview</Text>
-              <Text size="sm" c="dimmed">
-                current user: {selectedUser ? selectedUser.name : '—'}
-              </Text>
-              <Text size="sm" c="dimmed">
-                role: {selectedUser ? selectedUser.role : '—'}
-              </Text>
-              <Text size="sm" c="dimmed">
-                tenant scope:{' '}
-                {selectedUser && selectedUser.tenantScope.length > 0
-                  ? selectedUser.tenantScope.join(', ')
-                  : 'none'}
-              </Text>
-              <Text size="sm" c="dimmed">
-                organization scope:{' '}
-                {selectedUser && selectedUser.organizationScope.length > 0
-                  ? selectedUser.organizationScope.join(', ')
-                  : 'none'}
-              </Text>
-            </Stack>
-          </Paper>
+        <div className="min-h-0 flex-1">
+          <div className="grid h-full min-h-0 grid-cols-1 gap-4 pb-1 md:grid-cols-2 md:items-stretch">
+            <Paper
+              withBorder
+              radius="md"
+              p="md"
+              className="h-full min-h-0 bg-white/80 flex flex-col overflow-hidden"
+            >
+              <Stack gap="sm" className="h-full min-h-0">
+                <Text fw={700}>Reports</Text>
+                <Paper
+                  withBorder
+                  radius="sm"
+                  p="sm"
+                  className={summaryInfoCardClassName}
+                >
+                  <Stack gap={4}>
+                    <Text fw={600} size="sm">
+                      Launch context
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      user: {selectedUser ? selectedUser.name : '—'}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      role: {selectedUser ? selectedUser.role : '—'}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      tenant scope:{' '}
+                      {selectedUser && selectedUser.tenantScope.length > 0
+                        ? selectedUser.tenantScope.join(', ')
+                        : 'none'}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      organization scope:{' '}
+                      {selectedUser && selectedUser.organizationScope.length > 0
+                        ? selectedUser.organizationScope.join(', ')
+                        : 'none'}
+                    </Text>
+                  </Stack>
+                </Paper>
+                <TextInput
+                  label="Search by report name"
+                  placeholder="Type report name"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.currentTarget.value)}
+                />
 
-          <Paper withBorder radius="md" p="md" className="bg-white/80">
-            <Stack gap="sm">
-              <Text fw={700}>Reports</Text>
-
-              {filteredReports.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  No reports match the current search query.
-                </Text>
-              ) : null}
-
-              {filteredReports.map((report) => {
-                const isSelected = selectedReportCode === report.code;
-                const badge = getAvailabilityBadge(report, isSelected);
-                const isUnavailable = report.availability === 'unavailable';
-
-                return (
-                  <button
-                    key={report.code}
-                    type="button"
-                    onClick={() => {
-                      if (!isUnavailable) {
-                        onSelectReport?.(report.code);
-                      }
-                    }}
-                    className={[
-                      'rounded-lg border px-3 py-3 text-left transition',
-                      isSelected
-                        ? 'border-teal-500 bg-teal-50'
-                        : 'border-slate-300 bg-white hover:border-slate-500',
-                      isUnavailable ? 'cursor-not-allowed opacity-70 hover:border-slate-300' : '',
-                    ].join(' ')}
-                  >
-                    <Group justify="space-between" align="flex-start" gap="xs" wrap="wrap">
-                      <div>
-                        <Text fw={600}>{report.name}</Text>
-                        <Text size="sm" c="dimmed">
-                          {report.description}
-                        </Text>
-                      </div>
-                      <Badge color={badge.color} variant="light">
-                        {badge.label}
-                      </Badge>
-                    </Group>
-
-                    {isUnavailable && report.unavailableReason ? (
-                      <Text size="xs" c="red" mt={8}>
-                        {unavailableReasonLabel[report.unavailableReason]}
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-1">
+                  <Stack gap="sm">
+                    {filteredReports.length === 0 ? (
+                      <Text size="sm" c="dimmed">
+                        No reports match the current search query.
                       </Text>
                     ) : null}
-                  </button>
-                );
-              })}
-            </Stack>
-          </Paper>
-        </SimpleGrid>
+
+                    {filteredReports.map((report) => {
+                      const isSelected = selectedReportCode === report.code;
+                      const badge = getAvailabilityBadge(report, isSelected);
+                      const isUnavailable = report.availability === 'unavailable';
+
+                      return (
+                        <button
+                          key={report.code}
+                          type="button"
+                          onClick={() => {
+                            if (!isUnavailable) {
+                              onSelectReport?.(report.code);
+                            }
+                          }}
+                          className={[
+                            'rounded-lg border px-3 py-3 text-left transition',
+                            isSelected
+                              ? 'border-teal-500 bg-teal-50'
+                              : 'border-slate-300 bg-white hover:border-slate-500',
+                            isUnavailable
+                              ? 'cursor-not-allowed opacity-70 hover:border-slate-300'
+                              : '',
+                          ].join(' ')}
+                        >
+                          <Group justify="space-between" align="flex-start" gap="xs" wrap="wrap">
+                            <div>
+                              <Text fw={600}>{report.name}</Text>
+                              <Text size="sm" c="dimmed">
+                                {report.description}
+                              </Text>
+                            </div>
+                            <Badge color={badge.color} variant="light">
+                              {badge.label}
+                            </Badge>
+                          </Group>
+
+                          {isUnavailable && report.unavailableReason ? (
+                            <Text size="xs" c="red" mt={8}>
+                              {unavailableReasonLabel[report.unavailableReason]}
+                            </Text>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </Stack>
+                </div>
+              </Stack>
+            </Paper>
+
+            <Paper
+              withBorder
+              radius="md"
+              p="md"
+              className="h-full min-h-0 bg-white/80 flex flex-col overflow-hidden"
+            >
+              <Stack gap="sm" className="h-full min-h-0">
+                <Text fw={700}>Ready Instances ({readyInstances?.count ?? 0})</Text>
+
+                {readyInstances?.isLoading ? (
+                  <Text size="sm" c="dimmed">
+                    Loading completed report instances...
+                  </Text>
+                ) : null}
+
+                {!readyInstances?.isLoading &&
+                readyInstances?.canOpenLinks &&
+                readyInstances.count === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    No completed report instances for the selected report yet.
+                  </Text>
+                ) : null}
+
+                {!readyInstances?.isLoading &&
+                readyInstances &&
+                !readyInstances.canOpenLinks ? (
+                  <Text size="sm" c="dimmed">
+                    Insufficient role for detailed access. Showing total completed count only.
+                  </Text>
+                ) : null}
+
+                {!readyInstances?.isLoading &&
+                readyInstances &&
+                readyInstances.canOpenLinks ? (
+                  <>
+                    {selectedReadyInstance ? (
+                      <Paper
+                        withBorder
+                        radius="sm"
+                        p="sm"
+                        className={summaryInfoCardClassName}
+                      >
+                        <Stack gap={4}>
+                          <Text fw={600} size="sm">
+                            Selected instance
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            id: {selectedReadyInstance.id}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            file: {selectedReadyInstance.label}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            created: {selectedReadyInstance.createdAtLabel}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            finished: {selectedReadyInstance.finishedAtLabel}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            size: {selectedReadyInstance.sizeLabel}
+                          </Text>
+                        </Stack>
+                      </Paper>
+                    ) : (
+                      <Paper
+                        withBorder
+                        radius="sm"
+                        p="sm"
+                        className={summaryInfoCardClassName}
+                      >
+                        <Text size="sm" c="dimmed">
+                          Click an instance to preview details above the list.
+                        </Text>
+                      </Paper>
+                    )}
+
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-1">
+                      <Stack gap="xs">
+                        {readyInstances.items.map((instance) => {
+                          const isSelected = selectedReadyInstanceId === instance.id;
+
+                          return (
+                            <Paper
+                              key={instance.id}
+                              withBorder
+                              radius="sm"
+                              p="xs"
+                              className={isSelected ? 'border-teal-500 bg-teal-50' : 'bg-white'}
+                            >
+                              <Group justify="space-between" align="center" wrap="wrap" gap="xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedReadyInstanceId(instance.id);
+                                  }}
+                                  className="text-left text-sm font-medium text-slate-800 hover:text-slate-900"
+                                >
+                                  {instance.label}
+                                </button>
+                                {instance.downloadHref ? (
+                                  <Anchor
+                                    href={instance.downloadHref}
+                                    onClick={() => {
+                                      setSelectedReadyInstanceId(instance.id);
+                                    }}
+                                  >
+                                    Download
+                                  </Anchor>
+                                ) : (
+                                  <Badge color="gray" variant="light">
+                                    No file
+                                  </Badge>
+                                )}
+                              </Group>
+                              <Text size="xs" c="dimmed" mt={4}>
+                                {instance.createdAtLabel}
+                              </Text>
+                            </Paper>
+                          );
+                        })}
+                      </Stack>
+                    </div>
+                  </>
+                ) : null}
+              </Stack>
+            </Paper>
+          </div>
+        </div>
+
+        {onContinueToLaunchConfig ? (
+          <StepFooterActions>
+            <Button
+              disabled={!canContinueToLaunchConfig}
+              onClick={onContinueToLaunchConfig}
+              className="w-full sm:w-auto"
+            >
+              Continue to launch config
+            </Button>
+          </StepFooterActions>
+        ) : null}
       </Stack>
     </Card>
   );

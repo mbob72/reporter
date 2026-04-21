@@ -11,6 +11,7 @@ import {
 } from '@mantine/core';
 
 import type { RunProgressSnapshot } from '../types';
+import { StepFooterActions } from './StepFooterActions';
 
 type Step3RunProgressCardProps = {
   reportName: string;
@@ -78,80 +79,84 @@ export function Step3RunProgressCard({
       withBorder
       radius="lg"
       p={0}
-      className="w-full max-w-5xl mx-auto bg-surface shadow-panel"
+      className="h-full min-h-0 w-full max-w-5xl mx-auto bg-surface shadow-panel flex flex-col"
     >
-      <Stack gap="lg" className="p-4 sm:p-6">
-        <Group justify="space-between" align="flex-start" wrap="wrap" className="gap-2">
-          <div>
-            <Text tt="uppercase" fw={700} size="xs" c="dimmed">
-              Step 3
-            </Text>
-            <Title order={2}>Run Progress</Title>
-            <Text c="dimmed" size="sm" mt={6}>
-              Track background job execution with diagnostics and stage details.
-            </Text>
-          </div>
-          <Badge color={getStatusColor(snapshot.status)} variant="light">
-            {snapshot.status}
-          </Badge>
-        </Group>
+      <Stack gap="lg" className="h-full min-h-0 p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
+          <Stack gap="lg">
+            <Group justify="space-between" align="flex-start" wrap="wrap" className="gap-2">
+              <div>
+                <Text tt="uppercase" fw={700} size="xs" c="dimmed">
+                  Step 3
+                </Text>
+                <Title order={2}>Run Progress</Title>
+                <Text c="dimmed" size="sm" mt={6}>
+                  Track background job execution with diagnostics and stage details.
+                </Text>
+              </div>
+              <Badge color={getStatusColor(snapshot.status)} variant="light">
+                {snapshot.status}
+              </Badge>
+            </Group>
 
-        <Paper withBorder radius="md" p="md" className="bg-white/80">
-          <Group justify="space-between" align="flex-start" wrap="wrap" className="gap-2">
-            <Stack gap={4}>
-              <Text fw={700}>{reportName}</Text>
-              <Text size="sm" c="dimmed">
-                Report instance ID: {reportInstanceId}
-              </Text>
-              <Text size="sm" c="dimmed">
-                Current stage: {snapshot.stageLabel}
-              </Text>
-            </Stack>
-            <Text fw={700}>{snapshot.progress}%</Text>
-          </Group>
-
-          <Progress value={snapshot.progress} size="lg" radius="xl" mt="md" />
-        </Paper>
-
-        <Paper withBorder radius="md" p="md" className="bg-white/80">
-          <Stack gap="sm">
-            <Text fw={700}>Timeline</Text>
-            {snapshot.stages.map((stage) => (
-              <Group key={stage.id} justify="space-between" align="center" wrap="wrap">
-                <Text size="sm">{stage.label}</Text>
-                <Badge color={getStageBadgeColor(stage.status)} variant="light">
-                  {stage.status}
-                </Badge>
+            <Paper withBorder radius="md" p="md" className="bg-white/80">
+              <Group justify="space-between" align="flex-start" wrap="wrap" className="gap-2">
+                <Stack gap={4}>
+                  <Text fw={700}>{reportName}</Text>
+                  <Text size="sm" c="dimmed">
+                    Report instance ID: {reportInstanceId}
+                  </Text>
+                  <Text size="sm" c="dimmed">
+                    Current stage: {snapshot.stageLabel}
+                  </Text>
+                </Stack>
+                <Text fw={700}>{snapshot.progress}%</Text>
               </Group>
-            ))}
-          </Stack>
-        </Paper>
 
-        <Paper withBorder radius="md" p="md" className="bg-white/80">
-          <Stack gap="sm">
-            <Text fw={700}>Diagnostics</Text>
-            {snapshot.diagnostics.length === 0 ? (
-              <Text size="sm" c="dimmed">
-                No diagnostics yet.
-              </Text>
-            ) : null}
-            {snapshot.diagnostics.map((diagnostic) => (
-              <Group key={diagnostic.id} justify="space-between" align="center" wrap="wrap">
-                <Text size="sm">{diagnostic.message}</Text>
-                <Badge color={getDiagnosticColor(diagnostic.level)} variant="light">
-                  {diagnostic.level}
-                </Badge>
-              </Group>
-            ))}
-            {snapshot.failureMessage ? (
-              <Text size="sm" c="red">
-                {snapshot.failureMessage}
-              </Text>
-            ) : null}
-          </Stack>
-        </Paper>
+              <Progress value={snapshot.progress} size="lg" radius="xl" mt="md" />
+            </Paper>
 
-        <Group className="w-full">
+            <Paper withBorder radius="md" p="md" className="bg-white/80">
+              <Stack gap="sm">
+                <Text fw={700}>Timeline</Text>
+                {snapshot.stages.map((stage) => (
+                  <Group key={stage.id} justify="space-between" align="center" wrap="wrap">
+                    <Text size="sm">{stage.label}</Text>
+                    <Badge color={getStageBadgeColor(stage.status)} variant="light">
+                      {stage.status}
+                    </Badge>
+                  </Group>
+                ))}
+              </Stack>
+            </Paper>
+
+            <Paper withBorder radius="md" p="md" className="bg-white/80">
+              <Stack gap="sm">
+                <Text fw={700}>Diagnostics</Text>
+                {snapshot.diagnostics.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    No diagnostics yet.
+                  </Text>
+                ) : null}
+                {snapshot.diagnostics.map((diagnostic) => (
+                  <Group key={diagnostic.id} justify="space-between" align="center" wrap="wrap">
+                    <Text size="sm">{diagnostic.message}</Text>
+                    <Badge color={getDiagnosticColor(diagnostic.level)} variant="light">
+                      {diagnostic.level}
+                    </Badge>
+                  </Group>
+                ))}
+                {snapshot.failureMessage ? (
+                  <Text size="sm" c="red">
+                    {snapshot.failureMessage}
+                  </Text>
+                ) : null}
+              </Stack>
+            </Paper>
+          </Stack>
+        </div>
+
+        <StepFooterActions>
           <Button variant="light" onClick={onRefresh} className="w-full sm:w-auto">
             Refresh
           </Button>
@@ -165,7 +170,7 @@ export function Step3RunProgressCard({
               Go to result
             </Button>
           ) : null}
-        </Group>
+        </StepFooterActions>
       </Stack>
     </Card>
   );

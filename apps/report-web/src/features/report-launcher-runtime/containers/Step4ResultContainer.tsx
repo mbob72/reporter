@@ -191,7 +191,7 @@ export function Step4ResultContainer() {
   }, [launchSnapshot, reportInstanceQuery.data, reportInstancesQuery.data, reportTitle]);
 
   return (
-    <Stack gap="md" pt="md">
+    <Stack gap="md" pt="md" className="h-full min-h-0">
       <Step4ResultCard
         result={resultModel}
         onBackToReports={() => {

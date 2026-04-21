@@ -23,10 +23,10 @@ export function ReportLaunchShell() {
   const activeStep = useMemo(() => getActiveStep(location.pathname), [location.pathname]);
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-slate-100/90 p-2 sm:p-4 lg:p-8">
-      <Container size="xl" py="xl">
-        <Card withBorder radius="lg" p="lg" className="bg-white/70">
-          <Stack gap="md">
+    <div className="h-screen w-full overflow-hidden bg-slate-100/90 p-2 sm:p-4 lg:p-8">
+      <Container size="xl" className="h-full py-0">
+        <Card withBorder radius="lg" p="lg" className="h-full bg-white/70">
+          <Stack gap="md" className="h-full">
             <div>
               <Text tt="uppercase" fw={700} size="xs" c="dimmed">
                 Reporting Runtime
@@ -49,7 +49,9 @@ export function ReportLaunchShell() {
               <Stepper.Step label="Result" description="Artifacts & history" />
             </Stepper>
 
-            <Outlet />
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+              <Outlet />
+            </div>
           </Stack>
         </Card>
       </Container>

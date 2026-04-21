@@ -160,7 +160,7 @@ export function Step3RunProgressContainer() {
   }, [navigate, reportInstanceId, reportInstanceQuery.data?.status]);
 
   return (
-    <Stack gap="md" pt="md">
+    <Stack gap="md" pt="md" className="h-full min-h-0">
       <Step3RunProgressCard
         reportName={reportName}
         reportInstanceId={reportInstanceId}
