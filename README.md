@@ -2,29 +2,90 @@
 
 Этот README описывает backend-подходы в текущей реализации, чтобы ревьюеру было проще быстро проверить соответствие задания и понять архитектурные решения.
 
-## Dev инфраструктура (первый шаг)
+## Dev и Preview инфраструктура
 
-### Запуск через Docker Compose (dev)
+### Режимы запуска
 
-1. Установить зависимости на хосте:
+- **Dev compose** (`docker-compose.dev.yml`):
+  - bind mounts + live reload для `api` и `web`;
+  - сервисы: `api`, `web`, `redis`;
+  - подходит для ежедневной разработки.
+- **Preview compose** (`docker-compose.preview.yml`):
+  - production-like запуск без bind mounts;
+  - сервисы: `api`, `web`, `redis`;
+  - web собирается Vite build и отдается через nginx;
+  - API запускается из собранного JS-артефакта.
+
+### Dev compose (локальная разработка)
 
 ```bash
 pnpm install
+pnpm dev:docker
 ```
 
-2. Поднять локальное окружение:
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-После старта доступны сервисы:
+Сервисы:
 
 - web: `http://localhost:4200`
 - api: `http://localhost:3000`
 - redis: `localhost:6379`
 
-Redis добавлен в dev compose заранее как подготовка к будущему BullMQ workflow. На текущем шаге код приложения может его не использовать напрямую.
+Полезные команды:
+
+- `pnpm dev:docker:attach` — поднять в фоне и сразу смотреть логи.
+- `pnpm dev:docker:logs` — live-логи.
+- `pnpm dev:docker:down` — остановить окружение.
+
+### Preview compose (prod-like локальный smoke)
+
+```bash
+pnpm preview:docker
+```
+
+Сервисы:
+
+- web: `http://localhost:4200`
+- api: `http://localhost:3000`
+- redis: `localhost:6379`
+
+Полезные команды:
+
+- `pnpm preview:docker:logs` — live-логи.
+- `pnpm preview:docker:down` — остановить preview.
+
+### Health / Readiness
+
+- API health endpoint: `GET http://localhost:3000/health`
+- В `docker-compose.preview.yml` включены healthchecks для:
+  - `api`
+  - `redis`
+  - `web`
+
+Быстрый smoke-сценарий для preview:
+
+```bash
+curl -fsS http://localhost:3000/health
+curl -fsSI http://localhost:4200
+docker compose -f docker-compose.preview.yml exec -T redis redis-cli ping
+```
+
+### Storage (generated reports)
+
+- Хранилище generated reports настраивается переменной `GENERATED_REPORTS_DIR`.
+- По умолчанию:
+  - локально без Docker: `.generated-reports` (в корне репозитория)
+  - в dev compose: `/workspace/.generated-reports`
+  - preview compose: `/var/lib/reporter/generated-reports`
+- В preview compose путь `/var/lib/reporter/generated-reports` подключен к named volume `preview_generated_reports`, поэтому артефакты переживают перезапуск контейнеров.
+
+### Volumes в compose
+
+- `docker-compose.dev.yml`:
+  - `api_node_modules`, `web_node_modules` — изоляция `node_modules` внутри контейнеров.
+  - `api_pnpm_store`, `web_pnpm_store` — кеш pnpm store в контейнерах.
+  - `redis_data` — персистентные данные Redis для dev.
+- `docker-compose.preview.yml`:
+  - `preview_generated_reports` — generated reports API (`/var/lib/reporter/generated-reports`).
+  - `preview_redis_data` — персистентные данные Redis для preview.
 
 ### Локальный запуск без Docker
 
@@ -40,7 +101,7 @@ pnpm start:web
 - Web dev server слушает `0.0.0.0:4200` (доступен как `http://localhost:4200`)
 - Vite proxy target по умолчанию: `http://127.0.0.1:3000`
 
-Для Docker-сценария прокси web на API переключается через `VITE_PROXY_TARGET=http://api:3000`.
+Для Docker dev-сценария прокси web на API переключается через `VITE_PROXY_TARGET=http://api:3000`.
 
 ### Quality-check команды (root)
 
@@ -49,16 +110,9 @@ pnpm start:web
 - `pnpm format` — форматирует измененные Nx-файлы через Prettier (`nx format:write`).
 - `pnpm format:check` — проверяет форматирование без изменений (`nx format:check`).
 - `pnpm typecheck` — проверяет TypeScript-типы для `report-api` и `report-web` без сборки.
-- `pnpm build` — собирает `report-api` (tsc) и `report-web` (vite build).
+- `pnpm build` — собирает `report-api` и `report-web`.
 - `pnpm test` — запускает тесты `report-web` (Vitest).
 - `pnpm validate` — полный локальный quality gate: `format:check + lint + typecheck + test + build`.
-
-Дополнительно для Docker-режима:
-
-- `pnpm dev:docker` — поднимает локальное dev-окружение (`api + web + redis`) через Docker Compose с пересборкой.
-- `pnpm dev:docker:attach` — поднимает окружение в фоне и сразу подключает live-логи (удобный режим “запустил и смотришь”).
-- `pnpm dev:docker:down` — останавливает и удаляет контейнеры dev-compose.
-- `pnpm dev:docker:logs` — показывает live-логи всех сервисов dev-compose.
 
 Рекомендуемый быстрый цикл перед коммитом:
 
@@ -76,7 +130,7 @@ pnpm start:web
 2. Создается рабочая копия шаблона (временный файл) и в нее подставляются исходные данные.
 3. Для корректного пересчета формул/деривативов файл прогоняется через LibreOffice (`soffice --headless --convert-to xlsx`).
 4. Пересчитанный XLSX читается обратно и отдается как итоговый `BuiltFile`.
-5. Результат запуска сохраняется в файловой системе (`.generated-reports/{reportCode}/{reportInstanceId}`):
+5. Результат запуска сохраняется в файловой системе (`{GENERATED_REPORTS_DIR}/{reportCode}/{reportInstanceId}`):
    - `meta.json` — состояние экземпляра отчета,
    - `artifact.bin` — бинарник итогового файла.
 
@@ -105,7 +159,7 @@ pnpm start:web
 - Один запуск = один `reportInstanceId`, который живет независимо от результата (`completed` и `failed` одинаково валидны для чтения).
 - Добавлен endpoint восстановления состояния запуска: `GET /report-runs/:reportInstanceId`.
 - Добавлен endpoint истории запусков по коду отчета: `GET /reports/:reportCode/instances`.
-- Генерируемые файлы и метаданные запуска сохранены в файловой системе проекта в `.generated-reports`.
+- Генерируемые файлы и метаданные запуска сохраняются в каталоге `GENERATED_REPORTS_DIR` (по умолчанию `.generated-reports`).
 - Сохранен download flow через `GET /generated-files/:fileId`.
 - Старый `report-job` flow удален из backend.
 
@@ -199,19 +253,19 @@ pnpm start:web
 
 Корневой каталог:
 
-- `<repo-root>/.generated-reports`
+- `GENERATED_REPORTS_DIR` (default: `<repo-root>/.generated-reports`)
 
 Структура:
 
 ```txt
-.generated-reports/
+${GENERATED_REPORTS_DIR}/
   {reportCode}/
     {reportInstanceId}/
       meta.json
       artifact.bin
 ```
 
-В `.gitignore` добавлено:
+Если используется дефолтное локальное значение, в `.gitignore` добавлено:
 
 - `.generated-reports`
 
@@ -267,7 +321,7 @@ pnpm start:web
 - instance существует при успехе и при падении: `markCompleted` / `markFailed`
 - endpoint восстановления по id: `GET /report-runs/:reportInstanceId`
 - история по report code: `GET /reports/:reportCode/instances`
-- файловое хранение в проекте: `FileSystemReportInstanceStore` + `.generated-reports`
+- файловое хранение: `FileSystemReportInstanceStore` + `GENERATED_REPORTS_DIR`
 - без новой БД: используется fs store
 - без внешней очереди: worker через `fork`
 
@@ -287,7 +341,7 @@ pnpm start:web
 
 1. Запустить launch (`POST /reports/:reportCode/launch`) и убедиться, что ответ сразу содержит `reportInstanceId`.
 2. Прочитать `GET /report-runs/:reportInstanceId` до terminal state.
-3. Проверить появление файлов в `.generated-reports/{reportCode}/{reportInstanceId}`.
+3. Проверить появление файлов в `${GENERATED_REPORTS_DIR}/{reportCode}/{reportInstanceId}`.
 4. Проверить `GET /reports/:reportCode/instances`.
 5. Для completed instance проверить download по `GET /generated-files/:fileId`.
 

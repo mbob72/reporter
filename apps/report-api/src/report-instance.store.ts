@@ -106,13 +106,24 @@ function parseRecord(content: string): InternalReportInstanceRecord | undefined 
   }
 }
 
+function resolveStorageRootDir(rootDir?: string): string {
+  const configuredPath = (rootDir ?? process.env.GENERATED_REPORTS_DIR ?? '').trim();
+
+  if (configuredPath.length > 0) {
+    return resolve(configuredPath);
+  }
+
+  return resolve(process.cwd(), '.generated-reports');
+}
+
 export class FileSystemReportInstanceStore {
   private readonly reportCodeByInstanceId = new Map<string, string>();
   private readonly instanceLocks = new Map<string, Promise<void>>();
+  private readonly rootDir: string;
 
-  constructor(
-    private readonly rootDir: string = resolve(process.cwd(), '.generated-reports'),
-  ) {}
+  constructor(rootDir?: string) {
+    this.rootDir = resolveStorageRootDir(rootDir);
+  }
 
   async createQueuedInstance(params: {
     reportInstanceId: string;
@@ -333,9 +344,7 @@ export class FileSystemReportInstanceStore {
 
   private async update(
     reportInstanceId: string,
-    update:
-      | UpdateRecord
-      | ((current: InternalReportInstanceRecord) => UpdateRecord),
+    update: UpdateRecord | ((current: InternalReportInstanceRecord) => UpdateRecord),
   ): Promise<InternalReportInstanceRecord | undefined> {
     return this.withInstanceLock(reportInstanceId, async () => {
       const current = await this.get(reportInstanceId);
@@ -370,9 +379,9 @@ export class FileSystemReportInstanceStore {
     reportInstanceId: string,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const previous = (
-      this.instanceLocks.get(reportInstanceId) ?? Promise.resolve()
-    ).catch(() => undefined);
+    const previous = (this.instanceLocks.get(reportInstanceId) ?? Promise.resolve()).catch(
+      () => undefined,
+    );
     let releaseLock: () => void = () => undefined;
     const current = new Promise<void>((resolve) => {
       releaseLock = resolve;

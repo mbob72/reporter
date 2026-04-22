@@ -4,6 +4,7 @@ dist
 coverage
 .generated-reports
 .pnpm-store
+pnpm-lock.yaml
 
 *.xlsx
 *.bin
