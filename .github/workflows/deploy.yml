@@ -1,0 +1,105 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Docker Images
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (example: latest or sha-<full-commit-sha>)'
+        required: true
+        default: latest
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve deploy tag
+        id: tag
+        run: |
+          set -eu
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            DEPLOY_TAG="${{ github.event.inputs.image_tag }}"
+          else
+            DEPLOY_TAG="sha-${{ github.event.workflow_run.head_sha }}"
+          fi
+
+          if [ -z "${DEPLOY_TAG}" ]; then
+            DEPLOY_TAG="latest"
+          fi
+
+          echo "value=${DEPLOY_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize image owner
+        id: owner
+        run: echo "value=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure deploy directory exists
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -eu
+            mkdir -p "${{ secrets.DEPLOY_PATH }}/docker"
+
+      - name: Upload deployment files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: 'docker-compose.prod.yml,docker/Caddyfile'
+          target: ${{ secrets.DEPLOY_PATH }}
+          overwrite: true
+
+      - name: Pull and restart services
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          API_IMAGE: ghcr.io/${{ steps.owner.outputs.value }}/reporter-api:${{ steps.tag.outputs.value }}
+          WEB_IMAGE: ghcr.io/${{ steps.owner.outputs.value }}/reporter-web:${{ steps.tag.outputs.value }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          envs: DEPLOY_PATH,GHCR_USERNAME,GHCR_TOKEN,API_IMAGE,WEB_IMAGE
+          script: |
+            set -eu
+
+            cd "$DEPLOY_PATH"
+
+            if [ ! -f .env.production ]; then
+              echo "Missing $DEPLOY_PATH/.env.production. Create it from .env.production.example before deploy."
+              exit 1
+            fi
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+
+            API_IMAGE="$API_IMAGE" WEB_IMAGE="$WEB_IMAGE" docker compose --env-file .env.production -f docker-compose.prod.yml pull
+            API_IMAGE="$API_IMAGE" WEB_IMAGE="$WEB_IMAGE" docker compose --env-file .env.production -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps

@@ -6,6 +6,7 @@
   "targets": {
     "build": {
       "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/apps/report-web/dist/apps/report-web"],
       "options": {
         "command": "vite build --config apps/report-web/vite.config.ts --outDir dist/apps/report-web"
       }

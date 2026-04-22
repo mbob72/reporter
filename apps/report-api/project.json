@@ -6,6 +6,7 @@
   "targets": {
     "build": {
       "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/out-tsc/report-api"],
       "options": {
         "command": "tsc -p apps/report-api/tsconfig.json && tsc-alias -p apps/report-api/tsconfig.json && mkdir -p dist/out-tsc/report-api/libs/report-definitions/simple-sales-summary/template-assets dist/out-tsc/report-api/libs/report-definitions/simple-sales-summary-xlsx/template-assets && cp libs/report-definitions/simple-sales-summary/template-assets/*.xlsx dist/out-tsc/report-api/libs/report-definitions/simple-sales-summary/template-assets/ && cp libs/report-definitions/simple-sales-summary-xlsx/template-assets/*.xlsx dist/out-tsc/report-api/libs/report-definitions/simple-sales-summary-xlsx/template-assets/"
       }

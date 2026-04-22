@@ -49,6 +49,7 @@ pnpm preview:docker
 
 Полезные команды:
 
+- `pnpm preview:docker:attach` — поднять в фоне и сразу смотреть логи.
 - `pnpm preview:docker:logs` — live-логи.
 - `pnpm preview:docker:down` — остановить preview.
 
@@ -107,8 +108,8 @@ pnpm start:web
 
 - `pnpm lint` — запускает ESLint для `apps` и `libs`, проверяет стиль и базовые ошибки.
 - `pnpm lint:fix` — то же, но с автоисправлением безопасных lint-проблем.
-- `pnpm format` — форматирует измененные Nx-файлы через Prettier (`nx format:write`).
-- `pnpm format:check` — проверяет форматирование без изменений (`nx format:check`).
+- `pnpm format` — форматирует измененные файлы (`nx format:write`).
+- `pnpm format:check` — проверяет форматирование измененных файлов (`nx format:check`).
 - `pnpm typecheck` — проверяет TypeScript-типы для `report-api` и `report-web` без сборки.
 - `pnpm build` — собирает `report-api` и `report-web`.
 - `pnpm test` — запускает тесты `report-web` (Vitest).
@@ -119,6 +120,75 @@ pnpm start:web
 1. `pnpm lint:fix`
 2. `pnpm format`
 3. `pnpm validate`
+
+## CI/CD (GitHub Actions + VPS)
+
+В репозиторий добавлены production-ready workflow'ы и серверный compose-слой:
+
+- CI workflow: `.github/workflows/ci.yml`
+  - триггеры: `push` в `main`, `pull_request`;
+  - шаги: `format:check -> lint -> typecheck -> test -> build`;
+  - используется как главный quality gate перед merge.
+- Docker images workflow: `.github/workflows/docker-images.yml`
+  - триггер: `push` в `main`;
+  - собирает и публикует образы в GHCR:
+    - `ghcr.io/<owner>/reporter-api`
+    - `ghcr.io/<owner>/reporter-web`
+  - теги:
+    - `latest` (для default branch)
+    - `sha-<full-commit-sha>`.
+- Deploy workflow: `.github/workflows/deploy.yml`
+  - триггеры:
+    - автоматически после успешного workflow `Docker Images`,
+    - вручную через `workflow_dispatch` (можно указать `image_tag`);
+  - по SSH обновляет deployment-папку на сервере и выполняет:
+    - `docker compose pull`
+    - `docker compose up -d --remove-orphans`.
+
+Production runtime-файлы:
+
+- `docker-compose.prod.yml` — compose для VPS/Oracle (reverse proxy + api + web + redis).
+- `docker/Caddyfile` — reverse proxy с automatic TLS и маршрутизацией API/UI.
+- `.env.production.example` — шаблон обязательных server-side переменных.
+
+Где смотреть полную инструкцию по первому запуску, обновлению и rollback:
+
+- `docs/deployment.md`
+
+GitHub Secrets для workflow `Deploy`:
+
+- `SSH_HOST`
+- `SSH_PORT`
+- `SSH_USER`
+- `SSH_PRIVATE_KEY`
+- `DEPLOY_PATH`
+- `GHCR_USERNAME`
+- `GHCR_TOKEN`
+
+Кратко про первый запуск Oracle/VPS:
+
+1. Установить Docker Engine + Docker Compose plugin на сервер.
+2. Создать deployment-директорию (например `/opt/reporter`).
+3. Положить туда `docker-compose.prod.yml` и `docker/Caddyfile`.
+4. Создать `.env.production` по шаблону `.env.production.example`.
+5. Выполнить:
+   - `docker compose --env-file .env.production -f docker-compose.prod.yml pull`
+   - `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --remove-orphans`
+
+Как обновить деплой:
+
+- автоматически: workflow `Deploy` после успешного `Docker Images`;
+- вручную: запустить `Deploy` с нужным `image_tag` (`latest` или `sha-...`).
+
+Где хранятся generated reports в production:
+
+- named volume `generated_reports` (`/var/lib/reporter/generated-reports` внутри `api`).
+
+Как проверить, что сервисы живы после деплоя:
+
+- `curl -fsS https://<your-domain>/health`
+- `curl -fsSI https://<your-domain>/`
+- `docker compose --env-file .env.production -f docker-compose.prod.yml ps`
 
 ## 0. Верхнеуровневый сценарий (как формируется отчет)
 
