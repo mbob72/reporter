@@ -72,9 +72,9 @@ function assertTemplateAccess(currentUser: CurrentUser) {
       return;
     case 'Member':
     case 'Auditor':
-      throwForbidden();
+      return throwForbidden();
     default:
-      throwForbidden();
+      return throwForbidden();
   }
 }
 

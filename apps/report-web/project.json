@@ -4,6 +4,24 @@
   "projectType": "application",
   "sourceRoot": "apps/report-web/src",
   "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build --config apps/report-web/vite.config.ts --outDir dist/apps/report-web"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint --cache --max-warnings=0 --ext .ts,.tsx apps/report-web/src apps/report-web/vite.config.ts apps/report-web/vite.aliases.ts apps/report-web/.storybook"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p apps/report-web/tsconfig.json"
+      }
+    },
     "serve": {
       "executor": "nx:run-commands",
       "options": {
@@ -13,13 +31,13 @@
     "storybook": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook dev -p 4401 -c apps/report-web/.storybook"
+        "command": "STORYBOOK_DISABLE_TELEMETRY=1 storybook dev -p 4401 -c apps/report-web/.storybook"
       }
     },
     "build-storybook": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "HOME=/Users/macm1/Desktop/dev/test_constructor STORYBOOK_DISABLE_TELEMETRY=1 storybook build -c apps/report-web/.storybook -o dist/storybook/report-web"
+        "command": "STORYBOOK_DISABLE_TELEMETRY=1 storybook build -c apps/report-web/.storybook -o dist/storybook/report-web"
       }
     },
     "test": {

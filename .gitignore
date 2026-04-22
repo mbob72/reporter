@@ -1,4 +1,5 @@
 node_modules
+.pnpm-store
 dist
 .tmp
 tmp
@@ -20,3 +21,4 @@ coverage
 .nx/cache
 .nx/workspace-data
 .generated-reports
+.eslintcache

@@ -2,6 +2,70 @@
 
 Этот README описывает backend-подходы в текущей реализации, чтобы ревьюеру было проще быстро проверить соответствие задания и понять архитектурные решения.
 
+## Dev инфраструктура (первый шаг)
+
+### Запуск через Docker Compose (dev)
+
+1. Установить зависимости на хосте:
+
+```bash
+pnpm install
+```
+
+2. Поднять локальное окружение:
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+После старта доступны сервисы:
+
+- web: `http://localhost:4200`
+- api: `http://localhost:3000`
+- redis: `localhost:6379`
+
+Redis добавлен в dev compose заранее как подготовка к будущему BullMQ workflow. На текущем шаге код приложения может его не использовать напрямую.
+
+### Локальный запуск без Docker
+
+```bash
+pnpm install
+pnpm start:api
+pnpm start:web
+```
+
+По умолчанию:
+
+- API слушает `0.0.0.0:3000` (доступен как `http://localhost:3000`)
+- Web dev server слушает `0.0.0.0:4200` (доступен как `http://localhost:4200`)
+- Vite proxy target по умолчанию: `http://127.0.0.1:3000`
+
+Для Docker-сценария прокси web на API переключается через `VITE_PROXY_TARGET=http://api:3000`.
+
+### Quality-check команды (root)
+
+- `pnpm lint` — запускает ESLint для `apps` и `libs`, проверяет стиль и базовые ошибки.
+- `pnpm lint:fix` — то же, но с автоисправлением безопасных lint-проблем.
+- `pnpm format` — форматирует измененные Nx-файлы через Prettier (`nx format:write`).
+- `pnpm format:check` — проверяет форматирование без изменений (`nx format:check`).
+- `pnpm typecheck` — проверяет TypeScript-типы для `report-api` и `report-web` без сборки.
+- `pnpm build` — собирает `report-api` (tsc) и `report-web` (vite build).
+- `pnpm test` — запускает тесты `report-web` (Vitest).
+- `pnpm validate` — полный локальный quality gate: `format:check + lint + typecheck + test + build`.
+
+Дополнительно для Docker-режима:
+
+- `pnpm dev:docker` — поднимает локальное dev-окружение (`api + web + redis`) через Docker Compose с пересборкой.
+- `pnpm dev:docker:attach` — поднимает окружение в фоне и сразу подключает live-логи (удобный режим “запустил и смотришь”).
+- `pnpm dev:docker:down` — останавливает и удаляет контейнеры dev-compose.
+- `pnpm dev:docker:logs` — показывает live-логи всех сервисов dev-compose.
+
+Рекомендуемый быстрый цикл перед коммитом:
+
+1. `pnpm lint:fix`
+2. `pnpm format`
+3. `pnpm validate`
+
 ## 0. Верхнеуровневый сценарий (как формируется отчет)
 
 Текущий backend ориентирован на генерацию XLSX-отчетов на базе шаблонов.
@@ -211,11 +275,13 @@
 
 ```bash
 pnpm start:api
+pnpm start:web
 ```
 
-По умолчанию API слушает:
+По умолчанию:
 
-- `http://127.0.0.1:3000`
+- API: `http://localhost:3000`
+- Web: `http://localhost:4200`
 
 Проверка руками (пример):
 
