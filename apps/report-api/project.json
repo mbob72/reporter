@@ -23,6 +23,12 @@
         "command": "tsc --noEmit -p apps/report-api/tsconfig.json"
       }
     },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --config apps/report-api/vite.config.ts"
+      }
+    },
     "serve": {
       "executor": "nx:run-commands",
       "options": {

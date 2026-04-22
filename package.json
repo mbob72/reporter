@@ -22,6 +22,8 @@
     "build": "nx run-many -t build --projects=report-api,report-web --parallel=2",
     "test": "nx run-many -t test --projects=report-web",
     "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "test:report-api": "vitest run --config apps/report-api/vite.config.ts",
+    "test:report-api:watch": "vitest --config apps/report-api/vite.config.ts",
     "test:report-web": "vitest run --config apps/report-web/vite.config.ts",
     "test:report-web:watch": "vitest --config apps/report-web/vite.config.ts",
     "storybook:report-web": "STORYBOOK_DISABLE_TELEMETRY=1 storybook dev -p 4401 -c apps/report-web/.storybook",
