@@ -31,3 +31,4 @@ type ReportExecutionContext = {
     reportingDb: ServiceCredentialRef;
   };
 };
+```
