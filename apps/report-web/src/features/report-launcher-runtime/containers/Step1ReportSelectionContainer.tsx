@@ -8,50 +8,11 @@ import { useAppDispatch, useAppSelector } from '../../../app/hooks';
 import { Step1ReportSelectionCard } from '../../report-launcher-story/components/Step1ReportSelectionCard';
 import { buildLauncherUsers } from '../lib/launcherUsers';
 import { hasRoleAccess } from '../lib/access';
+import { mapReadyReportInstancesSummary } from '../lib/reportInstanceMappers';
 import { toUiErrorMessage } from '../lib/toUiErrorMessage';
-import {
-  useListReportInstancesByReportCodeQuery,
-  useListReportsQuery,
-} from '../api/reportApi';
-import {
-  resetLaunchDraft,
-  selectReport,
-} from '../store/launcherSlice';
+import { useListReportInstancesByReportCodeQuery, useListReportsQuery } from '../api/reportApi';
+import { resetLaunchDraft, selectReport } from '../store/launcherSlice';
 import { selectMockUser } from '../store/sessionSlice';
-
-function formatDateLabel(value: string | undefined): string {
-  if (!value) {
-    return '—';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.valueOf())) {
-    return value;
-  }
-
-  return date.toLocaleString();
-}
-
-function formatByteLength(byteLength: number | undefined): string {
-  if (typeof byteLength !== 'number' || Number.isNaN(byteLength)) {
-    return '—';
-  }
-
-  if (byteLength < 1024) {
-    return `${byteLength} B`;
-  }
-
-  const sizeInKb = byteLength / 1024;
-
-  if (sizeInKb < 1024) {
-    return `${sizeInKb.toFixed(1)} KB`;
-  }
-
-  const sizeInMb = sizeInKb / 1024;
-
-  return `${sizeInMb.toFixed(1)} MB`;
-}
 
 export function Step1ReportSelectionContainer() {
   const dispatch = useAppDispatch();
@@ -85,9 +46,7 @@ export function Step1ReportSelectionContainer() {
     });
   }, [currentUser.role, reportsQuery.data]);
 
-  const selectedReport = reportSelectionItems.find(
-    (report) => report.code === selectedReportCode,
-  );
+  const selectedReport = reportSelectionItems.find((report) => report.code === selectedReportCode);
 
   const canProceedToConfigure = selectedReport?.availability === 'available';
   const canOpenReadyInstanceLinks = Boolean(
@@ -96,25 +55,11 @@ export function Step1ReportSelectionContainer() {
   );
 
   const readyInstances = useMemo(() => {
-    const completedInstances = (reportInstancesQuery.data ?? []).filter(
-      (instance) => instance.status === 'completed',
-    );
-
-    return {
-      count: completedInstances.length,
+    return mapReadyReportInstancesSummary({
+      instances: reportInstancesQuery.data,
       canOpenLinks: canOpenReadyInstanceLinks,
       isLoading: reportInstancesQuery.isLoading || reportInstancesQuery.isFetching,
-      items: canOpenReadyInstanceLinks
-        ? completedInstances.map((instance) => ({
-            id: instance.id,
-            label: instance.fileName ?? instance.id,
-            downloadHref: instance.downloadUrl,
-            createdAtLabel: formatDateLabel(instance.finishedAt ?? instance.createdAt),
-            finishedAtLabel: formatDateLabel(instance.finishedAt),
-            sizeLabel: formatByteLength(instance.byteLength),
-          }))
-        : [],
-    };
+    });
   }, [
     canOpenReadyInstanceLinks,
     reportInstancesQuery.data,
@@ -170,13 +115,9 @@ export function Step1ReportSelectionContainer() {
 
       {reportInstancesQuery.error ? (
         <Alert color="red" variant="light">
-          {toUiErrorMessage(
-            reportInstancesQuery.error,
-            'Failed to load report run history.',
-          )}
+          {toUiErrorMessage(reportInstancesQuery.error, 'Failed to load report run history.')}
         </Alert>
       ) : null}
-
     </Stack>
   );
 }

@@ -105,6 +105,22 @@ export type ResultArtifact = {
   availability: ArtifactAvailability;
 };
 
+export type ReadyReportInstanceItem = {
+  id: string;
+  label: string;
+  downloadHref?: string;
+  createdAtLabel: string;
+  finishedAtLabel: string;
+  sizeLabel: string;
+};
+
+export type ReadyReportInstancesSummary = {
+  count: number;
+  canOpenLinks: boolean;
+  isLoading?: boolean;
+  items: ReadyReportInstanceItem[];
+};
+
 export type LaunchSummaryLine = {
   id: string;
   label: string;
@@ -113,9 +129,9 @@ export type LaunchSummaryLine = {
 
 export type Step4ResultModel = {
   summary: string;
-  primaryArtifact: ResultArtifact | null;
+  primaryArtifact?: ResultArtifact | null;
   recentArtifacts: ResultArtifact[];
-  launchSummary: LaunchSummaryLine[];
+  launchSummary?: LaunchSummaryLine[];
 };
 
 export type StepperDemoScenario = {

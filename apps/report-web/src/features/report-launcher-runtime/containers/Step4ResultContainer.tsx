@@ -2,7 +2,7 @@ import { Alert, Stack } from '@mantine/core';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { useAppDispatch, useAppSelector } from '../../../app/hooks';
+import { useAppDispatch } from '../../../app/hooks';
 import { Step4ResultCard } from '../../report-launcher-story/components/Step4ResultCard';
 import type { Step4ResultModel } from '../../report-launcher-story/types';
 import {
@@ -10,49 +10,19 @@ import {
   useListReportInstancesByReportCodeQuery,
   useListReportsQuery,
 } from '../api/reportApi';
+import {
+  formatReportByteLength,
+  formatReportDateLabel,
+  mapReportInstanceListItemToResultArtifact,
+  mapReportInstanceToPrimaryArtifact,
+} from '../lib/reportInstanceMappers';
 import { toUiErrorMessage } from '../lib/toUiErrorMessage';
 import { selectReport } from '../store/launcherSlice';
-
-function formatDateLabel(value: string | undefined): string {
-  if (!value) {
-    return '—';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.valueOf())) {
-    return value;
-  }
-
-  return date.toLocaleString();
-}
-
-function formatByteLength(byteLength: number | undefined): string {
-  if (typeof byteLength !== 'number' || Number.isNaN(byteLength)) {
-    return '—';
-  }
-
-  if (byteLength < 1024) {
-    return `${byteLength} B`;
-  }
-
-  const sizeInKb = byteLength / 1024;
-
-  if (sizeInKb < 1024) {
-    return `${sizeInKb.toFixed(1)} KB`;
-  }
-
-  const sizeInMb = sizeInKb / 1024;
-
-  return `${sizeInMb.toFixed(1)} MB`;
-}
 
 export function Step4ResultContainer() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { reportInstanceId = '' } = useParams();
-
-  const launchSnapshot = useAppSelector((state) => state.launcher.launchSnapshot);
 
   const reportInstanceQuery = useGetReportInstanceQuery(reportInstanceId, {
     skip: reportInstanceId.trim().length === 0,
@@ -62,9 +32,7 @@ export function Step4ResultContainer() {
   const reportInstancesQuery = useListReportInstancesByReportCodeQuery(
     reportInstanceQuery.data?.reportCode ?? '',
     {
-      skip:
-        !reportInstanceQuery.data ||
-        reportInstanceQuery.data.reportCode.trim().length === 0,
+      skip: !reportInstanceQuery.data || reportInstanceQuery.data.reportCode.trim().length === 0,
       refetchOnMountOrArgChange: true,
     },
   );
@@ -91,9 +59,7 @@ export function Step4ResultContainer() {
       return 'Unknown report';
     }
 
-    const report = (reportsQuery.data ?? []).find(
-      (reportItem) => reportItem.code === reportCode,
-    );
+    const report = (reportsQuery.data ?? []).find((reportItem) => reportItem.code === reportCode);
 
     return report?.title ?? reportCode;
   }, [reportInstanceQuery.data?.reportCode, reportsQuery.data]);
@@ -104,91 +70,33 @@ export function Step4ResultContainer() {
     if (!instance) {
       return {
         summary: 'Loading result...',
-        primaryArtifact: null,
         recentArtifacts: [],
-        launchSummary: [],
       };
     }
 
-    const primaryArtifact = instance.result
-      ? {
-          id: instance.artifactId ?? instance.id,
-          fileName: instance.result.fileName,
-          sizeLabel: formatByteLength(instance.result.byteLength),
-          createdAt: formatDateLabel(instance.finishedAt ?? instance.createdAt),
-          downloadUrl: instance.result.downloadUrl,
-          availability: instance.result.downloadUrl ? ('available' as const) : ('unavailable' as const),
-        }
-      : null;
+    const currentArtifact = mapReportInstanceToPrimaryArtifact(instance) ?? {
+      id: instance.artifactId ?? instance.id,
+      fileName: instance.fileName ?? `${instance.reportCode}-${instance.id}`,
+      sizeLabel: formatReportByteLength(instance.byteLength),
+      createdAt: formatReportDateLabel(instance.finishedAt ?? instance.createdAt),
+      downloadUrl: instance.result?.downloadUrl,
+      availability:
+        instance.status === 'completed' && Boolean(instance.result?.downloadUrl)
+          ? ('available' as const)
+          : ('unavailable' as const),
+    };
 
-    const recentArtifacts = (reportInstancesQuery.data ?? [])
+    const historicalArtifacts = (reportInstancesQuery.data ?? [])
       .filter((instanceItem) => instanceItem.id !== instance.id)
-      .map((instanceItem) => ({
-        id: instanceItem.id,
-        fileName: instanceItem.fileName ?? `${instanceItem.reportCode}-${instanceItem.id}`,
-        sizeLabel: formatByteLength(instanceItem.byteLength),
-        createdAt: formatDateLabel(instanceItem.finishedAt ?? instanceItem.createdAt),
-        downloadUrl: instanceItem.downloadUrl,
-        availability:
-          instanceItem.status === 'completed' && instanceItem.downloadUrl
-            ? ('available' as const)
-            : ('unavailable' as const),
-      }));
+      .map(mapReportInstanceListItemToResultArtifact);
 
-    const launchSummary = [
-      {
-        id: 'summary-report',
-        label: 'Report',
-        value: reportTitle,
-      },
-      {
-        id: 'summary-instance',
-        label: 'Report instance',
-        value: instance.id,
-      },
-      {
-        id: 'summary-created-at',
-        label: 'Created at',
-        value: formatDateLabel(instance.createdAt),
-      },
-      {
-        id: 'summary-finished-at',
-        label: 'Finished at',
-        value: formatDateLabel(instance.finishedAt),
-      },
-      {
-        id: 'summary-credential-mode',
-        label: 'Credential mode',
-        value:
-          launchSnapshot && launchSnapshot.reportCode === instance.reportCode
-            ? launchSnapshot.credentialMode
-            : 'unknown',
-      },
-      {
-        id: 'summary-tenant',
-        label: 'Tenant',
-        value:
-          launchSnapshot && launchSnapshot.reportCode === instance.reportCode
-            ? launchSnapshot.selectedTenantId || 'not selected'
-            : 'unknown',
-      },
-      {
-        id: 'summary-organization',
-        label: 'Organization',
-        value:
-          launchSnapshot && launchSnapshot.reportCode === instance.reportCode
-            ? launchSnapshot.selectedOrganizationId || 'not selected'
-            : 'unknown',
-      },
-    ];
+    const recentArtifacts = [currentArtifact, ...historicalArtifacts];
 
     return {
       summary: `Report run completed successfully for ${reportTitle}.`,
-      primaryArtifact,
       recentArtifacts,
-      launchSummary,
     };
-  }, [launchSnapshot, reportInstanceQuery.data, reportInstancesQuery.data, reportTitle]);
+  }, [reportInstanceQuery.data, reportInstancesQuery.data, reportTitle]);
 
   return (
     <Stack gap="md" pt="md" className="h-full min-h-0">
@@ -216,10 +124,7 @@ export function Step4ResultContainer() {
 
       {reportInstancesQuery.error ? (
         <Alert color="red" variant="light">
-          {toUiErrorMessage(
-            reportInstancesQuery.error,
-            'Failed to load report run history.',
-          )}
+          {toUiErrorMessage(reportInstancesQuery.error, 'Failed to load report run history.')}
         </Alert>
       ) : null}
     </Stack>

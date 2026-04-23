@@ -1,5 +1,4 @@
 import {
-  Anchor,
   Badge,
   Button,
   Card,
@@ -11,27 +10,16 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { useEffect, useMemo, useState } from 'react';
 
-import type { LauncherUser, ReportSelectionItem, UnavailableReportReason } from '../types';
+import type {
+  LauncherUser,
+  ReadyReportInstancesSummary,
+  ReportSelectionItem,
+  UnavailableReportReason,
+} from '../types';
 import { useResettableState } from '../hooks/useResettableState';
+import { ReportInstanceList } from './ReportInstanceList';
 import { StepFooterActions } from './StepFooterActions';
-
-type ReadyReportInstanceItem = {
-  id: string;
-  label: string;
-  downloadHref?: string;
-  createdAtLabel: string;
-  finishedAtLabel: string;
-  sizeLabel: string;
-};
-
-type ReadyReportInstancesSummary = {
-  count: number;
-  canOpenLinks: boolean;
-  isLoading?: boolean;
-  items: ReadyReportInstanceItem[];
-};
 
 type Step1ReportSelectionCardProps = {
   users: LauncherUser[];
@@ -78,36 +66,11 @@ export function Step1ReportSelectionCard({
   onContinueToLaunchConfig,
 }: Step1ReportSelectionCardProps) {
   const [searchValue, setSearchValue] = useResettableState(initialSearchValue);
-  const [selectedReadyInstanceId, setSelectedReadyInstanceId] = useState<string | null>(null);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
 
   const filteredReports = reports.filter((report) =>
     report.name.toLowerCase().includes(searchValue.trim().toLowerCase()),
   );
-  const selectedReadyInstance = useMemo(
-    () =>
-      readyInstances?.items.find((instance) => instance.id === selectedReadyInstanceId) ??
-      null,
-    [readyInstances?.items, selectedReadyInstanceId],
-  );
-
-  useEffect(() => {
-    if (
-      !readyInstances ||
-      !readyInstances.canOpenLinks ||
-      readyInstances.items.length === 0
-    ) {
-      setSelectedReadyInstanceId(null);
-      return;
-    }
-
-    if (
-      !selectedReadyInstanceId ||
-      !readyInstances.items.some((instance) => instance.id === selectedReadyInstanceId)
-    ) {
-      setSelectedReadyInstanceId(readyInstances.items[0].id);
-    }
-  }, [readyInstances, selectedReadyInstanceId]);
 
   return (
     <Card
@@ -159,12 +122,7 @@ export function Step1ReportSelectionCard({
             >
               <Stack gap="sm" className="h-full min-h-0">
                 <Text fw={700}>Reports</Text>
-                <Paper
-                  withBorder
-                  radius="sm"
-                  p="sm"
-                  className={summaryInfoCardClassName}
-                >
+                <Paper withBorder radius="sm" p="sm" className={summaryInfoCardClassName}>
                   <Stack gap={4}>
                     <Text fw={600} size="sm">
                       Launch context
@@ -268,114 +226,30 @@ export function Step1ReportSelectionCard({
                   </Text>
                 ) : null}
 
-                {!readyInstances?.isLoading &&
-                readyInstances?.canOpenLinks &&
-                readyInstances.count === 0 ? (
-                  <Text size="sm" c="dimmed">
-                    No completed report instances for the selected report yet.
-                  </Text>
-                ) : null}
-
-                {!readyInstances?.isLoading &&
-                readyInstances &&
-                !readyInstances.canOpenLinks ? (
+                {!readyInstances?.isLoading && readyInstances && !readyInstances.canOpenLinks ? (
                   <Text size="sm" c="dimmed">
                     Insufficient role for detailed access. Showing total completed count only.
                   </Text>
                 ) : null}
 
-                {!readyInstances?.isLoading &&
-                readyInstances &&
-                readyInstances.canOpenLinks ? (
-                  <>
-                    {selectedReadyInstance ? (
-                      <Paper
-                        withBorder
-                        radius="sm"
-                        p="sm"
-                        className={summaryInfoCardClassName}
-                      >
-                        <Stack gap={4}>
-                          <Text fw={600} size="sm">
-                            Selected instance
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            id: {selectedReadyInstance.id}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            file: {selectedReadyInstance.label}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            created: {selectedReadyInstance.createdAtLabel}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            finished: {selectedReadyInstance.finishedAtLabel}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            size: {selectedReadyInstance.sizeLabel}
-                          </Text>
-                        </Stack>
-                      </Paper>
-                    ) : (
-                      <Paper
-                        withBorder
-                        radius="sm"
-                        p="sm"
-                        className={summaryInfoCardClassName}
-                      >
-                        <Text size="sm" c="dimmed">
-                          Click an instance to preview details above the list.
-                        </Text>
-                      </Paper>
-                    )}
-
-                    <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-1">
-                      <Stack gap="xs">
-                        {readyInstances.items.map((instance) => {
-                          const isSelected = selectedReadyInstanceId === instance.id;
-
-                          return (
-                            <Paper
-                              key={instance.id}
-                              withBorder
-                              radius="sm"
-                              p="xs"
-                              className={isSelected ? 'border-teal-500 bg-teal-50' : 'bg-white'}
-                            >
-                              <Group justify="space-between" align="center" wrap="wrap" gap="xs">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedReadyInstanceId(instance.id);
-                                  }}
-                                  className="text-left text-sm font-medium text-slate-800 hover:text-slate-900"
-                                >
-                                  {instance.label}
-                                </button>
-                                {instance.downloadHref ? (
-                                  <Anchor
-                                    href={instance.downloadHref}
-                                    onClick={() => {
-                                      setSelectedReadyInstanceId(instance.id);
-                                    }}
-                                  >
-                                    Download
-                                  </Anchor>
-                                ) : (
-                                  <Badge color="gray" variant="light">
-                                    No file
-                                  </Badge>
-                                )}
-                              </Group>
-                              <Text size="xs" c="dimmed" mt={4}>
-                                {instance.createdAtLabel}
-                              </Text>
-                            </Paper>
-                          );
-                        })}
-                      </Stack>
-                    </div>
-                  </>
+                {!readyInstances?.isLoading && readyInstances && readyInstances.canOpenLinks ? (
+                  <ReportInstanceList
+                    items={readyInstances.items.map((instance) => ({
+                      id: instance.id,
+                      label: instance.label,
+                      metaLabel: instance.createdAtLabel,
+                      actionHref: instance.downloadHref,
+                      createdAtLabel: instance.createdAtLabel,
+                      finishedAtLabel: instance.finishedAtLabel,
+                      sizeLabel: instance.sizeLabel,
+                    }))}
+                    emptyMessage="No completed report instances for the selected report yet."
+                    actionLabel="Download"
+                    selectable
+                    selectedSummaryTitle="Selected instance"
+                    selectedSummaryEmptyMessage="Click an instance to preview details above the list."
+                    selectedSummaryClassName={summaryInfoCardClassName}
+                  />
                 ) : null}
               </Stack>
             </Paper>
