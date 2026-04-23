@@ -15,6 +15,7 @@
   - сервисы: `api`, `web`, `redis`;
   - web собирается Vite build и отдается через nginx;
   - API запускается из собранного JS-артефакта.
+  - `docker/api*.Dockerfile` устанавливают LibreOffice и выполняют build-time smoke-check `soffice` (version + `csv -> xlsx`), чтобы XLSX recalculation не ломался в рантайме.
 
 ### Dev compose (локальная разработка)
 
