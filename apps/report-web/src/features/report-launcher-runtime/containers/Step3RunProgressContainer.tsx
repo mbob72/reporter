@@ -2,10 +2,10 @@ import { Alert, Stack } from '@mantine/core';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { useAppDispatch } from '../../../app/hooks';
+import { useAppDispatch, useAppSelector } from '../../../app/hooks';
 import { Step3RunProgressCard } from '../../report-launcher-story/components/Step3RunProgressCard';
 import type { RunProgressSnapshot } from '../../report-launcher-story/types';
-import { useGetReportInstanceQuery, useListReportsQuery } from '../api/reportApi';
+import { reportApi, useGetReportInstanceQuery, useListReportsQuery } from '../api/reportApi';
 import { toUiErrorMessage } from '../lib/toUiErrorMessage';
 import { selectReport } from '../store/launcherSlice';
 
@@ -107,14 +107,22 @@ function buildRunSnapshot(params: {
   };
 }
 
+function isTerminalReportStatus(status?: 'queued' | 'running' | 'failed' | 'completed') {
+  return status === 'completed' || status === 'failed';
+}
+
 export function Step3RunProgressContainer() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { reportInstanceId = '' } = useParams();
+  const cachedInstance = useAppSelector(
+    reportApi.endpoints.getReportInstance.select(reportInstanceId),
+  );
+  const isTerminalStatus = isTerminalReportStatus(cachedInstance.data?.status);
 
   const reportInstanceQuery = useGetReportInstanceQuery(reportInstanceId, {
     skip: reportInstanceId.trim().length === 0,
-    pollingInterval: 1000,
+    pollingInterval: isTerminalStatus ? 0 : 1000,
     refetchOnMountOrArgChange: true,
   });
   const reportsQuery = useListReportsQuery();
@@ -182,10 +190,7 @@ export function Step3RunProgressContainer() {
 
       {reportInstanceQuery.error ? (
         <Alert color="red" variant="light">
-          {toUiErrorMessage(
-            reportInstanceQuery.error,
-            'Failed to load report instance state.',
-          )}
+          {toUiErrorMessage(reportInstanceQuery.error, 'Failed to load report instance state.')}
         </Alert>
       ) : null}
     </Stack>
