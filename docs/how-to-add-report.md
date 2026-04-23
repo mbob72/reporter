@@ -1,241 +1,125 @@
 # How To Add A New Report
 
-This guide describes the required steps to add a new report in this repository.
+Практическая инструкция для текущего состояния репозитория.
 
-It is intentionally concrete and aligned with the current implementation.
+Канонический архитектурный контекст: `ARCHITECTURE.md`.
 
-## 1. Create Report Module In `report-definitions`
+## 1. Создать пакет отчета
 
-Create a new library folder:
+Создайте директорию:
 
-```txt
+```text
 libs/report-definitions/<report-code>/
   src/
     <report-code>.contract.ts
+    <report-code>.source.ts
     <report-code>.service.ts
     <report-code>.definition.ts
     index.ts
-```
-
-Use existing reports as references:
-
-- `simple-sales-summary`
-- `simple-sales-summary-xlsx`
-
-## 2. Define Input/Output Contracts (Zod)
-
-In `<report-code>.contract.ts` define:
-
-- `ParamsSchema`
-- `ResultSchema`
-- exported TS types via `z.infer`
-
-Rules:
-
-- `params` must always be validated in `definition.ts` before launching service logic.
-- service output must always be validated against `ResultSchema` before returning from `launch`.
-- validation failures should throw `ApiError` with `code: 'VALIDATION_ERROR'`.
-
-## 3. Build Report Service
-
-In `<report-code>.service.ts`:
-
-- keep business logic in the service
-- inject dependencies through constructor
-- do not place HTTP/controller logic inside service
-
-The service may call repositories for internal data and external clients for third-party data.
-
-## 4. Internal Data Access: Repositories Only
-
-For internal DB-like data:
-
-- report code must use `@report-platform/data-access` repositories
-- report code must not create direct DB connections
-- report code must not handle internal DB credentials
-
-The launching user scope is always used for internal access control:
-
-- pass `currentUser` into repository methods
-- repository layer enforces role/tenant restrictions
-
-If a required repository does not exist yet, add it first:
-
-```txt
-libs/report-platform/data-access/src/
-  <entity>.repository.ts
-  <entity>.repository.mock.ts
-```
-
-Then export it from:
-
-- `libs/report-platform/data-access/src/index.ts`
-
-## 5. External Resources: Use Controlled Credential Flow
-
-External access must be done through platform services/clients, not raw ad-hoc calls.
-
-Credential modes:
-
-- `manual`: explicit credential in launch params (for example API key)
-- `shared_setting`: reference to credentials stored in the platform
-
-Expected params shape (example):
-
-```json
-{
-  "credentials": {
-    "mode": "shared_setting",
-    "sharedSettingId": "tenant-1-weather-default"
-  }
-}
-```
-
-or
-
-```json
-{
-  "credentials": {
-    "mode": "manual",
-    "apiKey": "replace-with-openweather-api-key"
-  }
-}
-```
-
-Implementation pattern:
-
-1. Declare external dependency in report metadata.
-2. Resolve/build external client via `ExternalClientFactory`.
-3. Pass typed client into report service.
-
-## 5.1. External Dependency Resilience Design
-
-See also: `docs/external-dependency-resilience.md` for a full decision guide and examples.
-
-For each external dependency, define in report/service code:
-
-- is it `critical` or `optional`?
-- which retry strategy is used?
-- which failures are retryable vs non-retryable?
-- if optional, what explicit fallback value is written into result/report?
-
-Rules:
-
-- low-level clients stay generic and typed
-- retry loop comes from reusable resilience helper
-- fallback semantics stay in report/service business logic
-
-Recommended default classification:
-
-- retryable: network errors, timeout, HTTP `429`, HTTP `5xx`
-- non-retryable: HTTP `400/401/403/404`, invalid local input before request execution
-
-Example (`simple-sales-summary` weather):
-
-- criticality: `optional`
-- strategy: `transientTwice`
-- fallback: `!error!`
-- behavior: report still launches and writes fallback into XLSX when weather fails
-
-## 6. Implement Report Definition
-
-In `<report-code>.definition.ts`, return a `ReportDefinition` object with:
-
-- `code`
-- `title`
-- `description`
-- `getMetadata(currentUser)`
-- `launch(currentUser, params)`
-
-`getMetadata` must include:
-
-- `minRoleToLaunch`
-- `fields` (input model used by frontend)
-- `externalDependencies` (if external services are used)
-
-`launch` flow must be:
-
-1. validate params
-2. prepare dependencies (repositories/external clients)
-3. call service
-4. validate result
-5. return validated data
-
-## 7. Register Report In API Providers
-
-Register the new report in:
-
-- `apps/report-api/src/reporting.providers.ts`
-
-Tasks:
-
-1. add required providers/tokens (repositories, factories, other dependencies)
-2. create report definition via `create<ReportName>Definition(...)`
-3. include it in `new ReportRegistry([...])`
-
-If the report is not added to `ReportRegistry`, API cannot launch it.
-
-## 8. Frontend Integration (Beyond Step 1)
-
-Current step 1 (select user/report) already exists. For new reports, extend later steps:
-
-1. fetch report metadata via `getReportMetadata(reportCode, ...)`
-2. build input UI from `metadata.fields`
-3. if tenant/org fields are present:
-   - load tenants via `listTenants`
-   - load organizations via `listOrganizations`
-4. if `externalDependencies` are present:
-   - show credential mode switch (`manual` vs `shared_setting`)
-   - load shared options via `listSharedSettings`
-5. build final `params` payload matching report `ParamsSchema`
-6. launch via `launchReport` (returns `{ jobId, status: 'queued' }`)
-7. poll `getReportJobStatus(jobId)` until `completed` or `failed`
-8. when completed, read `jobStatus.result` (for file reports: `DownloadableFileResult`)
-
-Main frontend/API-client paths:
-
-- `apps/report-web/src/App.tsx`
-- `libs/report-platform/api-client/src/get-report-metadata.ts`
-- `libs/report-platform/api-client/src/list-tenants.ts`
-- `libs/report-platform/api-client/src/list-organizations.ts`
-- `libs/report-platform/api-client/src/list-shared-settings.ts`
-- `libs/report-platform/api-client/src/launch-report.ts`
-- `libs/report-platform/api-client/src/get-report-job-status.ts`
-
-## 9. XLSX Report Variant (If Needed)
-
-If the report output is a generated XLSX file, add:
-
-```txt
-libs/report-definitions/<report-code>/
   template-assets/
     <template>.xlsx
-  src/
-    <report-code>.source.ts
-    <report-code>.template.ts
-    <report-code>.definition.ts
 ```
 
-Concept:
+Если отчет не файловый, `template-assets` можно не добавлять.
 
-- XLSX template is a stable part of report data model
-- source data is injected into template
-- formulas are recalculated
-- report returns `BuiltFile`
-- API stores file and returns downloadable metadata
+## 2. Описать контракты (zod)
 
-## 10. Required Completion Checklist
+В `<report-code>.contract.ts`:
 
-A report is considered integrated only if all items are true:
+- `ParamsSchema`;
+- типы через `z.infer`;
+- при необходимости source/result schema.
 
-- appears in `GET /reports`
-- returns valid metadata from `GET /reports/:code/metadata`
-- launches successfully through `POST /reports/:reportCode/launch` for allowed roles and returns queued job payload
-- returns live job state from `GET /report-jobs/:jobId`
-- returns `FORBIDDEN` for disallowed roles
-- validates params/result with zod
-- uses repositories for internal data access (no direct DB access)
-- uses controlled external credential flow when third-party APIs are involved
-- defines criticality (`critical`/`optional`) for each external dependency
-- chooses an explicit retry strategy for each external dependency usage
-- if dependency is optional, defines explicit fallback value/behavior in report output
+Требования:
+
+- params валидируются в `launch(...)`;
+- ошибки валидации возвращаются как `ApiError` с `code: 'VALIDATION_ERROR'`.
+
+## 3. Реализовать source/service
+
+- `source` собирает данные и внешние зависимости.
+- `service` формирует конечный результат.
+
+Правила:
+
+- внутренние данные только через `@report-platform/data-access`;
+- внешние API только через `@report-platform/external-api`;
+- не подключать БД напрямую в отчете.
+
+## 4. Реализовать definition
+
+В `<report-code>.definition.ts` верните `ReportDefinition`:
+
+- `code`, `title`, `description`;
+- `getMetadata(currentUser)`;
+- `launch(currentUser, params, options?)`.
+
+Ожидаемый pipeline в `launch`:
+
+1. parse params;
+2. подготовить зависимости;
+3. вызвать service/source;
+4. вернуть валидный результат.
+
+## 5. Если отчет XLSX
+
+Используйте `@report-platform/xlsx` (`fillTemplateWorkbook`).
+
+Принцип модели:
+
+- XLSX template является частью модели отчета;
+- производные вычисления делаются формулами в шаблоне;
+- код отчета подготавливает исходные данные и заполняет template.
+
+## 6. Зарегистрировать отчет в API
+
+Обновите:
+
+- `apps/report-api/src/report-registry.factory.ts`
+- при новых зависимостях: `apps/report-api/src/reporting.providers.ts`
+
+Без регистрации в `ReportRegistry` отчет не появится в API.
+
+## 7. Интегрировать frontend
+
+Минимум:
+
+1. metadata корректно описывает `fields` и `externalDependencies`;
+2. step2 строит launch payload, совместимый с `ParamsSchema`;
+3. после launch переход на `/report-runs/:reportInstanceId`.
+
+Основной runtime API фронта: `apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts`.
+
+## 8. Проверить async flow
+
+1. `POST /reports/:reportCode/launch` -> есть `reportInstanceId`.
+2. `GET /report-runs/:reportInstanceId` -> корректные статусы/stages.
+3. `GET /reports/:reportCode/instances` -> запуск виден в истории.
+4. Для completed: доступен `GET /generated-files/:fileId`.
+
+## 9. Внешние зависимости (если есть)
+
+Используйте explicit credential flow:
+
+- `manual`;
+- `shared_setting`.
+
+Resilience-подход: [docs/external-dependency-resilience.md](./external-dependency-resilience.md).
+
+Для каждой зависимости явно задайте:
+
+- `critical` или `optional`;
+- retry strategy;
+- fallback (если `optional`).
+
+## 10. Checklist завершения
+
+- Отчет виден в `GET /reports`.
+- Metadata валидна (`GET /reports/:code/metadata`).
+- Launch работает и возвращает `reportInstanceId`.
+- Статус читается через `GET /report-runs/:reportInstanceId`.
+- История по коду работает (`GET /reports/:reportCode/instances`).
+- Для файлового отчета работает download endpoint.
+- Нет прямого доступа к БД из report-definition.
+- Внешние зависимости проходят через platform external-api слой.
+- Добавлены тесты и пройдены `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
