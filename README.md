@@ -122,6 +122,30 @@ pnpm start:web
 2. `pnpm format`
 3. `pnpm validate`
 
+### Короткий релиз: изменения только в DB-репозиториях (`data-access`)
+
+Когда применяем:
+
+- изменены только файлы в `libs/report-platform/data-access/src/**` (допустимо: документация и `todo.md`);
+- не менялись `apps/report-web/**`, `libs/report-platform/contracts/**`, `libs/report-platform/api-client/**`.
+
+Nx-проверка для короткого релиза (только backend scope):
+
+```bash
+pnpm nx run report-api:lint
+pnpm nx run report-api:typecheck
+pnpm nx run report-api:test
+pnpm nx run report-api:build
+```
+
+Эквивалент одной командой:
+
+```bash
+pnpm nx run-many -t lint,typecheck,test,build --projects=report-api --parallel=1
+```
+
+Если затронут любой frontend/contract слой, короткий цикл не используем — запускаем полный `pnpm validate`.
+
 ## CI/CD (GitHub Actions + VPS)
 
 В репозиторий добавлены production-ready workflow'ы и серверный compose-слой:
