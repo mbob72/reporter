@@ -34,8 +34,6 @@ export function useStep2DataQueries() {
   );
 
   const externalDependency = metadataQuery.data?.externalDependencies[0] ?? null;
-  const hasExternalDependency = Boolean(externalDependency);
-
   const sharedSettingsQuery = useListSharedSettingsQuery(
     {
       reportCode: selectedReportCode,
@@ -60,7 +58,6 @@ export function useStep2DataQueries() {
     organizationsQuery,
     sharedSettingsQuery,
     externalDependency,
-    hasExternalDependency,
     selectedReport,
   };
 }

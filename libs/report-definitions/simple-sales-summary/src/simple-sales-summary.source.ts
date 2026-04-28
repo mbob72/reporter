@@ -1,6 +1,7 @@
 import type { ApiError, CurrentUser } from '@report-platform/contracts';
 import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
 import { getOrganizationsByTenant } from '@report-platform/data-access';
+import { canAccessTenantData } from '@report-platform/auth';
 import {
   executeWithResilience,
   RetryStrategies,
@@ -49,6 +50,13 @@ function throwNotFound(message: string): never {
   } satisfies ApiError;
 }
 
+function throwForbidden(message: string): never {
+  throw {
+    code: 'FORBIDDEN',
+    message,
+  } satisfies ApiError;
+}
+
 function buildTenantOrganizationKey(tenantId: string, organizationId: string): string {
   return `${tenantId}:${organizationId}`;
 }
@@ -88,11 +96,10 @@ export class SimpleSalesSummarySourceService {
       criticality: 'optional',
       retryStrategy: RetryStrategies.transientTwice,
       operation: async () => {
-        const airTemperatureCelsius =
-          await this.openWeatherClient.getCurrentTemperatureCelsius({
-            latitude: params.latitude,
-            longitude: params.longitude,
-          });
+        const airTemperatureCelsius = await this.openWeatherClient.getCurrentTemperatureCelsius({
+          latitude: params.latitude,
+          longitude: params.longitude,
+        });
 
         return formatTemperatureDisplay(airTemperatureCelsius);
       },
@@ -100,37 +107,35 @@ export class SimpleSalesSummarySourceService {
     });
   }
 
-  async getSource(currentUser: CurrentUser): Promise<SimpleSalesSummarySource> {
-    const tenantId = currentUser.tenantId;
+  async getSource(
+    currentUser: CurrentUser,
+    params: { tenantId: string; organizationId: string },
+  ): Promise<SimpleSalesSummarySource> {
+    const tenantId = params.tenantId;
+    const organizationId = params.organizationId;
 
-    if (!tenantId) {
-      throwValidationError('Simple Sales Summary requires a tenant-scoped user.');
+    if (!canAccessTenantData(currentUser, tenantId)) {
+      throwForbidden('You do not have access to requested tenant.');
     }
 
-    const defaultOrganization = getOrganizationsByTenant(tenantId)[0];
+    const organization = getOrganizationsByTenant(tenantId).find(
+      (item) => item.id === organizationId,
+    );
 
-    if (!defaultOrganization) {
-      throwNotFound('Organization not found for current tenant.');
+    if (!organization) {
+      throwNotFound('Organization not found for requested tenant.');
     }
 
     const coordinates = getCoordinatesForTenantOrganization({
       tenantId,
-      organizationId: defaultOrganization.id,
+      organizationId,
     });
 
     const [tenantName, organizationName, currentSalesAmount, airTemperatureDisplay] =
       await Promise.all([
         this.tenantRepository.getTenantName(currentUser, tenantId),
-        this.tenantRepository.getOrganizationName(
-          currentUser,
-          tenantId,
-          defaultOrganization.id,
-        ),
-        this.salesRepository.getCurrentSalesAmount(
-          currentUser,
-          tenantId,
-          defaultOrganization.id,
-        ),
+        this.tenantRepository.getOrganizationName(currentUser, tenantId, organizationId),
+        this.salesRepository.getCurrentSalesAmount(currentUser, tenantId, organizationId),
         this.getAirTemperatureDisplay({
           latitude: coordinates.latitude,
           longitude: coordinates.longitude,
@@ -139,7 +144,7 @@ export class SimpleSalesSummarySourceService {
 
     return SimpleSalesSummarySourceSchema.parse({
       tenantId,
-      organizationId: defaultOrganization.id,
+      organizationId,
       tenantName,
       organizationName,
       currentSalesAmount,

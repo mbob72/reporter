@@ -5,7 +5,6 @@ export type UnavailableReportReason =
   | 'tenant_scope_required'
   | 'organization_scope_required';
 
-export type CredentialsMode = 'manual' | 'shared_setting';
 export type ConstraintSeverity = 'info' | 'warning' | 'critical';
 export type RunStatus = 'queued' | 'running' | 'failed' | 'completed';
 export type RunStageStatus = 'pending' | 'active' | 'completed' | 'failed';
@@ -35,44 +34,15 @@ export type LaunchConstraint = {
   severity: ConstraintSeverity;
 };
 
-export type LaunchParameterField = {
-  key: string;
-  label: string;
-  placeholder: string;
-  required?: boolean;
-  value?: string;
-  helperText?: string;
-  disabled?: boolean;
-};
-
-export type SharedSettingOption = {
-  id: string;
-  label: string;
-  description: string;
-};
-
-export type LaunchConfigurationModel = {
+export type LaunchConfigurationModel<TLaunchParams = unknown> = {
   reportCode: string;
   reportTitle: string;
   reportDescription: string;
   contextSummary: string;
   constraints: LaunchConstraint[];
-  parameterFields: LaunchParameterField[];
-  credentials: {
-    manualLabel: string;
-    sharedLabel: string;
-    defaultMode: CredentialsMode;
-    manualApiKey?: string;
-    sharedSettings: SharedSettingOption[];
-    selectedSharedSettingId?: string;
-    sharedSettingsLoading?: boolean;
-    sharedSettingsEmptyReason?: string;
-    sharedModeDisabled?: boolean;
-  };
   canLaunch: boolean;
   disabledReason?: string;
-  forcedValidationMessage?: string;
-  externalDependency?: string;
+  initialValues: TLaunchParams;
 };
 
 export type ProgressStageItem = {

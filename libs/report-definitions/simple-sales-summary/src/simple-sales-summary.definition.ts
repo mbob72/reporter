@@ -1,18 +1,21 @@
 import type {
-  ApiError,
   CurrentUser,
   ReportMetadata,
+  SimpleSalesSummaryLaunchParams,
+} from '@report-platform/contracts';
+import {
+  SIMPLE_SALES_SUMMARY_REPORT_CODE,
+  SimpleSalesSummaryLaunchParamsSchema,
 } from '@report-platform/contracts';
 import type { SalesRepository, TenantRepository } from '@report-platform/data-access';
 import type { ExternalClientFactory } from '@report-platform/external-api';
 import type { ReportDefinition } from '@report-platform/registry';
 import type { BuiltFile } from '@report-platform/xlsx';
 
-import { SimpleSalesSummaryParamsSchema } from './simple-sales-summary.contract';
 import { SimpleSalesSummaryService } from './simple-sales-summary.service';
 import { SimpleSalesSummarySourceService } from './simple-sales-summary.source';
 
-export const SIMPLE_SALES_SUMMARY_REPORT_CODE = 'simple-sales-summary';
+export { SIMPLE_SALES_SUMMARY_REPORT_CODE };
 
 type CreateSimpleSalesSummaryDefinitionOptions = {
   tenantRepository: TenantRepository;
@@ -27,7 +30,6 @@ const reportMetadata: ReportMetadata = {
   description:
     'Template-based XLSX with tenant, organization, current sales, and current air temperature.',
   minRoleToLaunch: 'TenantAdmin',
-  fields: [],
   externalDependencies: [
     {
       serviceKey: 'openWeather',
@@ -37,53 +39,38 @@ const reportMetadata: ReportMetadata = {
   ],
 };
 
-function throwValidationError(message: string): never {
-  throw {
-    code: 'VALIDATION_ERROR',
-    message,
-  } satisfies ApiError;
-}
-
 export function createSimpleSalesSummaryDefinition(
   options: CreateSimpleSalesSummaryDefinitionOptions,
-): ReportDefinition<BuiltFile> {
+): ReportDefinition<SimpleSalesSummaryLaunchParams, BuiltFile> {
   return {
     code: reportMetadata.code,
     title: reportMetadata.title,
     description: reportMetadata.description,
+    launchParamsSchema: SimpleSalesSummaryLaunchParamsSchema,
     getMetadata(_currentUser: CurrentUser): ReportMetadata {
       return reportMetadata;
     },
     async launch(
       currentUser: CurrentUser,
-      params: unknown,
+      params: SimpleSalesSummaryLaunchParams,
       launchOptions,
     ): Promise<BuiltFile> {
-      const parsedParams = SimpleSalesSummaryParamsSchema.safeParse(params);
-
-      if (!parsedParams.success) {
-        throwValidationError('Invalid report params.');
-      }
-
-      const openWeatherClient = await options.externalClientFactory.getOpenWeatherClient(
-        {
-          currentUser,
-          reportMetadata,
-          reportCode: reportMetadata.code,
-          credentialInput: parsedParams.data.credentials,
-        },
-      );
+      const openWeatherClient = await options.externalClientFactory.getOpenWeatherClient({
+        currentUser,
+        reportMetadata,
+        reportCode: reportMetadata.code,
+        credentialInput: params.credentials,
+      });
       const sourceService = new SimpleSalesSummarySourceService(
         options.tenantRepository,
         options.salesRepository,
         openWeatherClient,
       );
-      const reportService = new SimpleSalesSummaryService(
-        sourceService,
-        options.templatePath,
-      );
+      const reportService = new SimpleSalesSummaryService(sourceService, options.templatePath);
 
       const builtFile = await reportService.run(currentUser, {
+        tenantId: params.tenantId,
+        organizationId: params.organizationId,
         onSourceLoaded() {
           launchOptions?.onProgress?.(60);
         },

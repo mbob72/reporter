@@ -1,45 +1,25 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import type { SharedSettingOption } from '@report-platform/contracts';
-
 import { useAppDispatch, useAppSelector } from '../../../../../app/hooks';
-import type {
-  OrganizationOption,
-  TenantOption,
-} from '../../../api/reportApi';
-import {
-  setCredentialMode,
-  setSelectedOrganization,
-  setSelectedSharedSetting,
-  setSelectedTenant,
-} from '../../../store/launcherSlice';
+import type { OrganizationOption, TenantOption } from '../../../api/reportApi';
+import { setSelectedOrganization, setSelectedTenant } from '../../../store/launcherSlice';
 
 type UseStep2FlowEffectsParams = {
-  hasExternalDependency: boolean;
   tenantOptions: TenantOption[];
   organizationOptions: OrganizationOption[];
-  sharedSettings: SharedSettingOption[];
 };
 
 export function useStep2FlowEffects({
-  hasExternalDependency,
   tenantOptions,
   organizationOptions,
-  sharedSettings,
 }: UseStep2FlowEffectsParams) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const selectedReportCode = useAppSelector((state) => state.launcher.selectedReportCode);
   const selectedTenantId = useAppSelector((state) => state.launcher.selectedTenantId);
-  const selectedOrganizationId = useAppSelector(
-    (state) => state.launcher.selectedOrganizationId,
-  );
-  const selectedSharedSettingId = useAppSelector(
-    (state) => state.launcher.selectedSharedSettingId,
-  );
-  const credentialMode = useAppSelector((state) => state.launcher.credentialMode);
+  const selectedOrganizationId = useAppSelector((state) => state.launcher.selectedOrganizationId);
 
   useEffect(
     function redirectToStep1WhenReportCodeIsMissingEffect() {
@@ -98,40 +78,5 @@ export function useStep2FlowEffects({
       }
     },
     [dispatch, selectedOrganizationId, selectedTenantId, organizationOptions],
-  );
-
-  useEffect(
-    function forceManualCredentialModeWithoutExternalDependencyEffect() {
-      if (!hasExternalDependency && credentialMode === 'shared_setting') {
-        dispatch(setCredentialMode('manual'));
-        dispatch(setSelectedSharedSetting(''));
-      }
-    },
-    [credentialMode, dispatch, hasExternalDependency],
-  );
-
-  useEffect(
-    function syncSharedSettingSelectionWithAvailableOptionsEffect() {
-      if (credentialMode !== 'shared_setting') {
-        return;
-      }
-
-      if (sharedSettings.length === 0) {
-        if (selectedSharedSettingId) {
-          dispatch(setSelectedSharedSetting(''));
-        }
-
-        return;
-      }
-
-      const hasSelectedSharedSetting = sharedSettings.some(
-        (setting) => setting.id === selectedSharedSettingId,
-      );
-
-      if (!hasSelectedSharedSetting) {
-        dispatch(setSelectedSharedSetting(sharedSettings[0].id));
-      }
-    },
-    [credentialMode, dispatch, selectedSharedSettingId, sharedSettings],
   );
 }

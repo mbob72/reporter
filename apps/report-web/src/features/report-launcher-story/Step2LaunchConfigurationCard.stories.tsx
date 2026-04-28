@@ -7,9 +7,6 @@ const meta = {
   title: 'Report Launcher Story/Step 2 - Launch Configuration',
   component: Step2LaunchConfigurationCard,
   tags: ['autodocs'],
-  args: {
-    onLaunch: () => undefined,
-  },
 } satisfies Meta<typeof Step2LaunchConfigurationCard>;
 
 export default meta;
@@ -17,30 +14,24 @@ type Story = StoryObj<typeof meta>;
 
 export const ReportWithoutExternalDependency: Story = {
   args: {
-    configuration: step2StoryStates.withoutExternalDependency,
+    configuration: step2StoryStates.noExternalDependency,
   },
 };
 
-export const ReportWithManualCredentials: Story = {
+export const ReportReadyToLaunch: Story = {
   args: {
-    configuration: step2StoryStates.withManualCredentials,
+    configuration: step2StoryStates.readyToLaunch,
   },
 };
 
-export const ReportWithSharedSetting: Story = {
+export const MetadataLoading: Story = {
   args: {
-    configuration: step2StoryStates.withSharedSetting,
+    configuration: step2StoryStates.metadataLoading,
   },
 };
 
 export const ForbiddenLaunch: Story = {
   args: {
     configuration: step2StoryStates.forbiddenLaunch,
-  },
-};
-
-export const ValidationErrorState: Story = {
-  args: {
-    configuration: step2StoryStates.validationError,
   },
 };

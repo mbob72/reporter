@@ -7,3 +7,4 @@ export * from './report-launch.contract';
 export * from './report-instance.contract';
 export * from './report-metadata.contract';
 export * from './shared-settings.contract';
+export * from './reports';

@@ -27,7 +27,7 @@ import type {
 type StartReportInstanceArgs = {
   reportCode: string;
   currentUser: MockUser;
-  params: Record<string, unknown>;
+  params: unknown;
 };
 
 type InstanceLifecycleState = 'active' | 'finalizing' | 'finalized';
@@ -114,9 +114,7 @@ function isProgressMessage(value: unknown): value is WorkerProgressMessage {
   );
 }
 
-function isCompletedMessage(
-  value: unknown,
-): value is WorkerCompletedBuiltFileMessage {
+function isCompletedMessage(value: unknown): value is WorkerCompletedBuiltFileMessage {
   return (
     isRecord(value) &&
     value.type === 'completed-built-file' &&
@@ -176,10 +174,17 @@ export class ReportInstanceRunner {
     return acceptedPayload;
   }
 
-  private buildInternalParams(
-    reportCode: string,
-    params: Record<string, unknown>,
-  ): Record<string, unknown> {
+  private buildInternalParams(reportCode: string, params: unknown): Record<string, unknown> {
+    if (!isRecord(params)) {
+      if (reportCode !== SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE) {
+        return {};
+      }
+
+      return {
+        datasetKey: this.datasetRotation.nextDatasetKey(),
+      };
+    }
+
     if (reportCode !== SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE) {
       return params;
     }
@@ -192,10 +197,7 @@ export class ReportInstanceRunner {
     };
   }
 
-  private startWorker(
-    reportInstanceId: string,
-    startMessage: ParentStartMessage,
-  ): void {
+  private startWorker(reportInstanceId: string, startMessage: ParentStartMessage): void {
     const { workerPath, execArgv } = resolveWorkerLaunchConfig();
     const child = fork(workerPath, [], {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
@@ -230,11 +232,7 @@ export class ReportInstanceRunner {
         }
 
         await this.reportInstanceStore.markRunning(reportInstanceId);
-        await this.reportInstanceStore.updateProgress(
-          reportInstanceId,
-          'storing-result',
-          90,
-        );
+        await this.reportInstanceStore.updateProgress(reportInstanceId, 'storing-result', 90);
 
         const artifact = await this.reportInstanceStore.saveArtifact({
           reportInstanceId,
@@ -254,11 +252,7 @@ export class ReportInstanceRunner {
           throw new Error('Invalid downloadable file result.');
         }
 
-        await this.reportInstanceStore.markCompleted(
-          reportInstanceId,
-          parsedResult.data,
-          artifact,
-        );
+        await this.reportInstanceStore.markCompleted(reportInstanceId, parsedResult.data, artifact);
         this.logger.log(`report instance completed id=${reportInstanceId} stage=done`);
         lifecycleState = 'finalized';
         removeListeners();

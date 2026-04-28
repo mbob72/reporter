@@ -11,17 +11,10 @@ import {
   Res,
 } from '@nestjs/common';
 
-import {
-  canAccessTenantData,
-  getCurrentUser,
-  MOCK_USER_HEADER,
-} from '@report-platform/auth';
+import { canAccessTenantData, getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
 import type { SharedSettingsProvider } from '@report-platform/external-api';
 import { SHARED_SETTINGS_PROVIDER_TOKEN } from '@report-platform/external-api';
-import {
-  getAllTenants,
-  getOrganizationsByTenant,
-} from '@report-platform/data-access';
+import { getAllTenants, getOrganizationsByTenant } from '@report-platform/data-access';
 import {
   LaunchReportBodySchema,
   ReportInstanceListResponseSchema,
@@ -84,10 +77,7 @@ export class ReportsController {
 
   @Get('reports/:code/metadata')
   @HttpCode(200)
-  async getReportMetadata(
-    @Param('code') reportCode: string,
-    @Req() req: RequestWithHeaders,
-  ) {
+  async getReportMetadata(@Param('code') reportCode: string, @Req() req: RequestWithHeaders) {
     try {
       const currentUser = getCurrentUser(req.headers);
       const reportMetadata = this.reportRegistry.getReportMetadata(reportCode, currentUser);
@@ -146,9 +136,7 @@ export class ReportsController {
         reportCode,
         serviceKey,
       });
-      const parsedResponse = SharedSettingOptionListSchema.safeParse(
-        sharedSettingOptions,
-      );
+      const parsedResponse = SharedSettingOptionListSchema.safeParse(sharedSettingOptions);
 
       if (!parsedResponse.success) {
         throw new Error('Invalid shared settings response.');
@@ -239,6 +227,17 @@ export class ReportsController {
         } satisfies ApiError;
       }
 
+      const parsedLaunchParams = reportDefinition.launchParamsSchema.safeParse(
+        parsedBody.data.params,
+      );
+
+      if (!parsedLaunchParams.success) {
+        throw {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid launch params for selected report.',
+        } satisfies ApiError;
+      }
+
       this.logger.log(
         `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
       );
@@ -246,7 +245,7 @@ export class ReportsController {
       return await this.reportInstanceRunner.start({
         reportCode,
         currentUser,
-        params: parsedBody.data.params,
+        params: parsedLaunchParams.data,
       });
     } catch (error) {
       throw toHttpException(error);
@@ -294,10 +293,7 @@ export class ReportsController {
 
   @Get('generated-files/:fileId')
   @HttpCode(200)
-  async downloadGeneratedFile(
-    @Param('fileId') fileId: string,
-    @Res() res: any,
-  ) {
+  async downloadGeneratedFile(@Param('fileId') fileId: string, @Res() res: any) {
     try {
       const storedFile = await this.reportInstanceStore.getArtifact(fileId);
 
@@ -309,10 +305,7 @@ export class ReportsController {
       }
 
       res.setHeader('Content-Type', storedFile.mimeType);
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${storedFile.fileName}"`,
-      );
+      res.setHeader('Content-Disposition', `attachment; filename="${storedFile.fileName}"`);
       res.setHeader('Content-Length', String(storedFile.bytes.byteLength));
       res.send(Buffer.from(storedFile.bytes));
     } catch (error) {

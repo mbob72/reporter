@@ -1,26 +1,34 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-import type { CredentialsMode } from '../../report-launcher-story/types';
+import type {
+  SimpleSalesSummaryLaunchParams,
+  SimpleSalesSummaryXlsxLaunchParams,
+} from '@report-platform/contracts';
+import {
+  SIMPLE_SALES_SUMMARY_REPORT_CODE,
+  SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
+} from '@report-platform/contracts';
 
 export type LaunchSnapshot = {
-  reportCode: string;
-  selectedTenantId: string;
-  selectedOrganizationId: string;
-  credentialMode: CredentialsMode;
-  selectedSharedSettingId: string;
-  manualApiKey: string;
-  parameters: Record<string, string>;
+  draft: ReportLaunchDraft;
   submittedAt: string;
 };
+
+export type ReportLaunchDraft =
+  | {
+      reportCode: typeof SIMPLE_SALES_SUMMARY_REPORT_CODE;
+      params: SimpleSalesSummaryLaunchParams;
+    }
+  | {
+      reportCode: typeof SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE;
+      params: SimpleSalesSummaryXlsxLaunchParams;
+    };
 
 type LauncherState = {
   selectedReportCode: string;
   selectedTenantId: string;
   selectedOrganizationId: string;
-  credentialMode: CredentialsMode;
-  selectedSharedSettingId: string;
-  manualApiKey: string;
-  parameterValues: Record<string, string>;
+  launchDraft: ReportLaunchDraft | null;
   launchSnapshot: LaunchSnapshot | null;
 };
 
@@ -28,10 +36,7 @@ const initialState: LauncherState = {
   selectedReportCode: '',
   selectedTenantId: '',
   selectedOrganizationId: '',
-  credentialMode: 'manual',
-  selectedSharedSettingId: '',
-  manualApiKey: '',
-  parameterValues: {},
+  launchDraft: null,
   launchSnapshot: null,
 };
 
@@ -48,64 +53,8 @@ const launcherSlice = createSlice({
     setSelectedOrganization(state, action: PayloadAction<string>) {
       state.selectedOrganizationId = action.payload;
     },
-    setCredentialMode(state, action: PayloadAction<CredentialsMode>) {
-      state.credentialMode = action.payload;
-    },
-    setSelectedSharedSetting(state, action: PayloadAction<string>) {
-      state.selectedSharedSettingId = action.payload;
-    },
-    setManualApiKey(state, action: PayloadAction<string>) {
-      state.manualApiKey = action.payload;
-    },
-    setParameterValue(
-      state,
-      action: PayloadAction<{ key: string; value: string }>,
-    ) {
-      state.parameterValues[action.payload.key] = action.payload.value;
-    },
-    setParameterValues(state, action: PayloadAction<Record<string, string>>) {
-      state.parameterValues = {
-        ...state.parameterValues,
-        ...action.payload,
-      };
-    },
-    saveLaunchDraft(
-      state,
-      action: PayloadAction<{
-        selectedTenantId?: string;
-        selectedOrganizationId?: string;
-        credentialMode?: CredentialsMode;
-        selectedSharedSettingId?: string;
-        manualApiKey?: string;
-        parameterValues?: Record<string, string>;
-      }>,
-    ) {
-      if (typeof action.payload.selectedTenantId === 'string') {
-        state.selectedTenantId = action.payload.selectedTenantId;
-      }
-
-      if (typeof action.payload.selectedOrganizationId === 'string') {
-        state.selectedOrganizationId = action.payload.selectedOrganizationId;
-      }
-
-      if (typeof action.payload.credentialMode === 'string') {
-        state.credentialMode = action.payload.credentialMode;
-      }
-
-      if (typeof action.payload.selectedSharedSettingId === 'string') {
-        state.selectedSharedSettingId = action.payload.selectedSharedSettingId;
-      }
-
-      if (typeof action.payload.manualApiKey === 'string') {
-        state.manualApiKey = action.payload.manualApiKey;
-      }
-
-      if (action.payload.parameterValues) {
-        state.parameterValues = {
-          ...state.parameterValues,
-          ...action.payload.parameterValues,
-        };
-      }
+    saveLaunchDraft(state, action: PayloadAction<ReportLaunchDraft>) {
+      state.launchDraft = action.payload;
     },
     saveLaunchSnapshot(state, action: PayloadAction<LaunchSnapshot>) {
       state.launchSnapshot = action.payload;
@@ -113,10 +62,7 @@ const launcherSlice = createSlice({
     resetLaunchDraft(state) {
       state.selectedTenantId = '';
       state.selectedOrganizationId = '';
-      state.credentialMode = 'manual';
-      state.selectedSharedSettingId = '';
-      state.manualApiKey = '';
-      state.parameterValues = {};
+      state.launchDraft = null;
       state.launchSnapshot = null;
     },
   },
@@ -126,11 +72,6 @@ export const {
   selectReport,
   setSelectedTenant,
   setSelectedOrganization,
-  setCredentialMode,
-  setSelectedSharedSetting,
-  setManualApiKey,
-  setParameterValue,
-  setParameterValues,
   saveLaunchDraft,
   saveLaunchSnapshot,
   resetLaunchDraft,

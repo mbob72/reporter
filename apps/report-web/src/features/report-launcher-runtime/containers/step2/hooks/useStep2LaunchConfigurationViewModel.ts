@@ -1,28 +1,28 @@
 import { useMemo } from 'react';
 
-import {
-  DEFAULT_MOCK_USER_ID,
-  mockUsers,
-} from '@report-platform/auth';
+import { DEFAULT_MOCK_USER_ID, mockUsers } from '@report-platform/auth';
 import type {
   ReportListItem,
   ReportMetadata,
   SharedSettingOption,
+  SimpleSalesSummaryLaunchParams,
+  SimpleSalesSummaryXlsxLaunchParams,
+} from '@report-platform/contracts';
+import {
+  SIMPLE_SALES_SUMMARY_REPORT_CODE,
+  SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
 } from '@report-platform/contracts';
 
 import { useAppSelector } from '../../../../../app/hooks';
-import type {
-  LaunchConfigurationModel,
-  SharedSettingOption as SharedSettingViewOption,
-} from '../../../../report-launcher-story/types';
 import { hasRoleAccess } from '../../../lib/access';
+import type { ReportLaunchDraft } from '../../../store/launcherSlice';
+import type { ReportStep2Configuration, SharedSettingViewOption } from '../types';
 
 type UseStep2LaunchConfigurationViewModelParams = {
   selectedReport: ReportListItem | undefined;
   metadata: ReportMetadata | undefined;
   metadataLoading: boolean;
   reportsLoading: boolean;
-  hasExternalDependency: boolean;
   externalDependencyServiceKey: string | undefined;
   sharedSettings: SharedSettingOption[];
   sharedSettingsLoading: boolean;
@@ -38,12 +38,63 @@ function formatContextSummary(params: {
   return `Execution context: initiator=${params.mockUserId} (${params.role}), tenant=${params.selectedTenantId || 'not selected'}, organization=${params.selectedOrganizationId || 'not selected'}.`;
 }
 
+function buildSimpleSalesInitialValues(params: {
+  selectedTenantId: string;
+  selectedOrganizationId: string;
+  launchDraft: ReportLaunchDraft | null;
+  sharedSettingOptions: SharedSettingViewOption[];
+}): SimpleSalesSummaryLaunchParams {
+  const previousDraft =
+    params.launchDraft?.reportCode === SIMPLE_SALES_SUMMARY_REPORT_CODE
+      ? params.launchDraft.params
+      : undefined;
+
+  const credentials = previousDraft?.credentials ?? {
+    mode: 'manual' as const,
+    apiKey: '',
+  };
+
+  if (credentials.mode === 'shared_setting') {
+    const hasSelectedSharedSetting = params.sharedSettingOptions.some(
+      (setting) => setting.id === credentials.sharedSettingId,
+    );
+
+    const sharedSettingId = hasSelectedSharedSetting
+      ? credentials.sharedSettingId
+      : (params.sharedSettingOptions[0]?.id ?? '');
+
+    return {
+      tenantId: params.selectedTenantId,
+      organizationId: params.selectedOrganizationId,
+      credentials: {
+        mode: 'shared_setting',
+        sharedSettingId,
+      },
+    };
+  }
+
+  return {
+    tenantId: params.selectedTenantId,
+    organizationId: params.selectedOrganizationId,
+    credentials,
+  };
+}
+
+function buildSimpleSalesXlsxInitialValues(params: {
+  launchDraft: ReportLaunchDraft | null;
+}): SimpleSalesSummaryXlsxLaunchParams {
+  if (params.launchDraft?.reportCode !== SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE) {
+    return {};
+  }
+
+  return params.launchDraft.params;
+}
+
 export function useStep2LaunchConfigurationViewModel({
   selectedReport,
   metadata,
   metadataLoading,
   reportsLoading,
-  hasExternalDependency,
   externalDependencyServiceKey,
   sharedSettings,
   sharedSettingsLoading,
@@ -52,15 +103,8 @@ export function useStep2LaunchConfigurationViewModel({
   const selectedMockUserId = useAppSelector((state) => state.session.selectedMockUserId);
   const selectedReportCode = useAppSelector((state) => state.launcher.selectedReportCode);
   const selectedTenantId = useAppSelector((state) => state.launcher.selectedTenantId);
-  const selectedOrganizationId = useAppSelector(
-    (state) => state.launcher.selectedOrganizationId,
-  );
-  const credentialMode = useAppSelector((state) => state.launcher.credentialMode);
-  const selectedSharedSettingId = useAppSelector(
-    (state) => state.launcher.selectedSharedSettingId,
-  );
-  const manualApiKey = useAppSelector((state) => state.launcher.manualApiKey);
-  const parameterValues = useAppSelector((state) => state.launcher.parameterValues);
+  const selectedOrganizationId = useAppSelector((state) => state.launcher.selectedOrganizationId);
+  const launchDraft = useAppSelector((state) => state.launcher.launchDraft);
 
   const currentUser = mockUsers[selectedMockUserId] ?? mockUsers[DEFAULT_MOCK_USER_ID];
 
@@ -76,7 +120,7 @@ export function useStep2LaunchConfigurationViewModel({
 
   const sharedSettingsEmptyReason = useMemo(
     function buildSharedSettingsEmptyReason() {
-      if (!hasExternalDependency) {
+      if (!externalDependencyServiceKey) {
         return 'This report does not require shared settings.';
       }
 
@@ -90,7 +134,7 @@ export function useStep2LaunchConfigurationViewModel({
 
       return undefined;
     },
-    [hasExternalDependency, sharedSettingsLoading, sharedSettingOptions.length],
+    [externalDependencyServiceKey, sharedSettingsLoading, sharedSettingOptions.length],
   );
 
   const hasLaunchAccess = metadata
@@ -111,20 +155,12 @@ export function useStep2LaunchConfigurationViewModel({
         return `Insufficient role. Minimum role is ${metadata.minRoleToLaunch}.`;
       }
 
-      if (
-        externalDependencyServiceKey &&
-        credentialMode === 'shared_setting' &&
-        !selectedSharedSettingId
-      ) {
-        return 'Select shared setting before launch.';
+      if (!selectedTenantId) {
+        return 'No tenant selected yet.';
       }
 
-      if (
-        externalDependencyServiceKey &&
-        credentialMode === 'manual' &&
-        manualApiKey.trim().length === 0
-      ) {
-        return 'Provide API key in manual mode before launch.';
+      if (!selectedOrganizationId) {
+        return 'No organization selected yet.';
       }
 
       return undefined;
@@ -135,107 +171,107 @@ export function useStep2LaunchConfigurationViewModel({
       reportsLoading,
       hasLaunchAccess,
       metadata,
-      externalDependencyServiceKey,
-      credentialMode,
-      selectedSharedSettingId,
-      manualApiKey,
+      selectedTenantId,
+      selectedOrganizationId,
     ],
   );
 
-  const launchConfiguration: LaunchConfigurationModel = useMemo(
-    function buildLaunchConfigurationModel() {
-      return {
-        reportCode: selectedReportCode,
-        reportTitle: metadata?.title ?? selectedReport?.title ?? selectedReportCode,
-        reportDescription:
-          metadata?.description ?? selectedReport?.description ?? 'Report launch',
-        contextSummary: formatContextSummary({
-          mockUserId: selectedMockUserId,
-          role: currentUser.role,
-          selectedTenantId,
-          selectedOrganizationId,
-        }),
-        constraints: [
-          {
-            id: 'role-gate',
-            label: 'Role gate',
-            details: metadata
-              ? `Minimum role: ${metadata.minRoleToLaunch}`
-              : 'Metadata is loading.',
-            severity: hasLaunchAccess ? 'info' : 'critical',
-          },
-          {
-            id: 'tenant-scope',
-            label: 'Tenant scope',
-            details: selectedTenantId
-              ? `Selected tenant: ${selectedTenantId}`
-              : 'No tenant selected yet.',
-            severity: selectedTenantId ? 'info' : 'warning',
-          },
-          {
-            id: 'organization-scope',
-            label: 'Organization scope',
-            details: selectedOrganizationId
-              ? `Selected organization: ${selectedOrganizationId}`
-              : 'Organization is optional or not available.',
-            severity: selectedOrganizationId ? 'info' : 'warning',
-          },
-          {
-            id: 'external-dependency',
-            label: 'External dependency',
-            details: externalDependencyServiceKey
-              ? `Service: ${externalDependencyServiceKey}`
-              : 'No external dependency declared.',
-            severity: externalDependencyServiceKey ? 'critical' : 'info',
-          },
-        ],
-        parameterFields: (metadata?.fields ?? [])
-          .filter((field) => field.kind === 'text')
-          .map((field) => ({
-            key: field.name,
-            label: field.label,
-            placeholder: field.label,
-            required: field.required,
-            value: parameterValues[field.name] ?? '',
-          })),
-        credentials: {
-          manualLabel: 'Manual API key',
-          sharedLabel: 'Shared setting',
-          defaultMode: credentialMode,
-          manualApiKey,
-          sharedSettings: sharedSettingOptions,
-          selectedSharedSettingId,
-          sharedSettingsLoading: hasExternalDependency && sharedSettingsLoading,
-          sharedSettingsEmptyReason,
-          sharedModeDisabled: !hasExternalDependency,
+  const baseConfiguration = useMemo(
+    () => ({
+      reportTitle: metadata?.title ?? selectedReport?.title ?? selectedReportCode,
+      reportDescription: metadata?.description ?? selectedReport?.description ?? 'Report launch',
+      contextSummary: formatContextSummary({
+        mockUserId: selectedMockUserId,
+        role: currentUser.role,
+        selectedTenantId,
+        selectedOrganizationId,
+      }),
+      constraints: [
+        {
+          id: 'role-gate',
+          label: 'Role gate',
+          details: metadata ? `Minimum role: ${metadata.minRoleToLaunch}` : 'Metadata is loading.',
+          severity: hasLaunchAccess ? ('info' as const) : ('critical' as const),
         },
-        canLaunch: Boolean(metadata) && hasLaunchAccess && !disabledReason && !isLaunching,
-        disabledReason,
-        externalDependency: externalDependencyServiceKey,
-      };
-    },
+        {
+          id: 'tenant-scope',
+          label: 'Tenant scope',
+          details: selectedTenantId
+            ? `Selected tenant: ${selectedTenantId}`
+            : 'No tenant selected yet.',
+          severity: selectedTenantId ? ('info' as const) : ('warning' as const),
+        },
+        {
+          id: 'organization-scope',
+          label: 'Organization scope',
+          details: selectedOrganizationId
+            ? `Selected organization: ${selectedOrganizationId}`
+            : 'No organization selected yet.',
+          severity: selectedOrganizationId ? ('info' as const) : ('warning' as const),
+        },
+        {
+          id: 'external-dependency',
+          label: 'External dependency',
+          details: externalDependencyServiceKey
+            ? `Service: ${externalDependencyServiceKey}`
+            : 'No external dependency declared.',
+          severity: externalDependencyServiceKey ? ('critical' as const) : ('info' as const),
+        },
+      ],
+      canLaunch: Boolean(metadata) && hasLaunchAccess && !disabledReason && !isLaunching,
+      disabledReason,
+    }),
     [
-      selectedReportCode,
       metadata,
       selectedReport,
+      selectedReportCode,
       selectedMockUserId,
       currentUser.role,
       selectedTenantId,
       selectedOrganizationId,
       hasLaunchAccess,
       externalDependencyServiceKey,
-      parameterValues,
-      credentialMode,
-      manualApiKey,
-      sharedSettingOptions,
-      selectedSharedSettingId,
-      hasExternalDependency,
-      sharedSettingsLoading,
-      sharedSettingsEmptyReason,
       disabledReason,
       isLaunching,
     ],
   );
+
+  const launchConfiguration = useMemo<ReportStep2Configuration | null>(() => {
+    switch (selectedReportCode) {
+      case SIMPLE_SALES_SUMMARY_REPORT_CODE:
+        return {
+          reportCode: SIMPLE_SALES_SUMMARY_REPORT_CODE,
+          ...baseConfiguration,
+          initialValues: buildSimpleSalesInitialValues({
+            selectedTenantId,
+            selectedOrganizationId,
+            launchDraft,
+            sharedSettingOptions,
+          }),
+          sharedSettings: sharedSettingOptions,
+          sharedSettingsLoading: Boolean(externalDependencyServiceKey) && sharedSettingsLoading,
+          sharedSettingsEmptyReason,
+        };
+      case SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE:
+        return {
+          reportCode: SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
+          ...baseConfiguration,
+          initialValues: buildSimpleSalesXlsxInitialValues({ launchDraft }),
+        };
+      default:
+        return null;
+    }
+  }, [
+    selectedReportCode,
+    baseConfiguration,
+    selectedTenantId,
+    selectedOrganizationId,
+    launchDraft,
+    sharedSettingOptions,
+    externalDependencyServiceKey,
+    sharedSettingsLoading,
+    sharedSettingsEmptyReason,
+  ]);
 
   return {
     launchConfiguration,

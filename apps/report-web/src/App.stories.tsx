@@ -11,9 +11,7 @@ import type { AppStore } from './app/store';
 import {
   resetLaunchDraft,
   selectReport,
-  setCredentialMode,
   setSelectedOrganization,
-  setSelectedSharedSetting,
   setSelectedTenant,
 } from './features/report-launcher-runtime/store/launcherSlice';
 import { selectMockUser } from './features/report-launcher-runtime/store/sessionSlice';
@@ -23,8 +21,6 @@ type RuntimeBootstrapState = {
   selectedReportCode?: string;
   selectedTenantId?: string;
   selectedOrganizationId?: string;
-  credentialMode?: 'manual' | 'shared_setting';
-  selectedSharedSettingId?: string;
 };
 
 type AppStoryProps = {
@@ -56,7 +52,6 @@ const reportMetadataPayloadByCode: Record<string, unknown> = {
     description:
       'Template-based XLSX with tenant, organization, current sales, and current air temperature.',
     minRoleToLaunch: 'TenantAdmin',
-    fields: [],
     externalDependencies: [
       {
         serviceKey: 'openWeather',
@@ -71,7 +66,6 @@ const reportMetadataPayloadByCode: Record<string, unknown> = {
     description:
       'Template-based XLSX report built from products and channel scenarios with recalculated formulas.',
     minRoleToLaunch: 'TenantAdmin',
-    fields: [],
     externalDependencies: [],
   },
 };
@@ -184,9 +178,7 @@ function installMockApiFetch(): () => void {
 
     if (
       pathParts.length === 0 ||
-      (pathParts[0] !== 'reports' &&
-        pathParts[0] !== 'tenants' &&
-        pathParts[0] !== 'report-runs')
+      (pathParts[0] !== 'reports' && pathParts[0] !== 'tenants' && pathParts[0] !== 'report-runs')
     ) {
       return originalFetch(input, init);
     }
@@ -301,14 +293,6 @@ function bootstrapStore(store: AppStore, bootstrapState: RuntimeBootstrapState |
   if (bootstrapState?.selectedOrganizationId) {
     store.dispatch(setSelectedOrganization(bootstrapState.selectedOrganizationId));
   }
-
-  if (bootstrapState?.credentialMode) {
-    store.dispatch(setCredentialMode(bootstrapState.credentialMode));
-  }
-
-  if (bootstrapState?.selectedSharedSettingId) {
-    store.dispatch(setSelectedSharedSetting(bootstrapState.selectedSharedSettingId));
-  }
 }
 
 function AppStoryRuntime({ initialPath, bootstrapState }: AppStoryProps) {
@@ -366,8 +350,6 @@ export const Step2ConfigureRoute: Story = {
       selectedReportCode: 'simple-sales-summary',
       selectedTenantId: 'tenant-1',
       selectedOrganizationId: 'org-1',
-      credentialMode: 'shared_setting',
-      selectedSharedSettingId: 'tenant-1-weather-default',
     },
   },
 };

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type { MockUser } from '@report-platform/auth';
 import type { ReportDefinition } from '@report-platform/registry';
@@ -23,19 +24,19 @@ function createBuiltFile(): BuiltFile {
 }
 
 function createReportDefinition(
-  launch: ReportDefinition<BuiltFile>['launch'],
-): ReportDefinition<BuiltFile> {
+  launch: ReportDefinition<unknown, BuiltFile>['launch'],
+): ReportDefinition<unknown, BuiltFile> {
   return {
     code: 'report-a',
     title: 'Report A',
     description: 'Testing report',
+    launchParamsSchema: z.object({}).passthrough(),
     getMetadata() {
       return {
         code: 'report-a',
         title: 'Report A',
         description: 'Testing report',
         minRoleToLaunch: 'TenantAdmin',
-        fields: [],
         externalDependencies: [],
       };
     },

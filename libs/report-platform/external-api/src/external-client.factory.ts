@@ -1,17 +1,12 @@
-import type { ApiError, CurrentUser, ReportMetadata } from '@report-platform/contracts';
+import type {
+  ApiError,
+  CurrentUser,
+  OpenWeatherCredentialInput,
+  ReportMetadata,
+} from '@report-platform/contracts';
 
 import { OpenWeatherClient } from './open-weather.client';
 import type { SharedSettingsProvider } from './shared-settings.provider';
-
-export type OpenWeatherCredentialInput =
-  | {
-      mode: 'manual';
-      apiKey: string;
-    }
-  | {
-      mode: 'shared_setting';
-      sharedSettingId: string;
-    };
 
 function throwValidationError(message: string): never {
   throw {
@@ -41,13 +36,12 @@ export class ExternalClientFactory {
       return new OpenWeatherClient(params.credentialInput.apiKey);
     }
 
-    const resolvedSharedCredentials =
-      await this.sharedSettingsProvider.resolveCredentials({
-        currentUser: params.currentUser,
-        reportCode: params.reportCode,
-        serviceKey: 'openWeather',
-        sharedSettingId: params.credentialInput.sharedSettingId,
-      });
+    const resolvedSharedCredentials = await this.sharedSettingsProvider.resolveCredentials({
+      currentUser: params.currentUser,
+      reportCode: params.reportCode,
+      serviceKey: 'openWeather',
+      sharedSettingId: params.credentialInput.sharedSettingId,
+    });
 
     return new OpenWeatherClient(resolvedSharedCredentials.apiKey);
   }

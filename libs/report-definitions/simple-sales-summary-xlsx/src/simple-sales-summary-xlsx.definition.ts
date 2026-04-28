@@ -4,15 +4,16 @@ import type {
   ApiError,
   CurrentUser,
   ReportMetadata,
+  SimpleSalesSummaryXlsxLaunchParams,
 } from '@report-platform/contracts';
-import type {
-  ChannelsRepository,
-  ProductsRepository,
-} from '@report-platform/data-access';
+import {
+  SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
+  SimpleSalesSummaryXlsxLaunchParamsSchema,
+} from '@report-platform/contracts';
+import type { ChannelsRepository, ProductsRepository } from '@report-platform/data-access';
 import type { ReportDefinition } from '@report-platform/registry';
 import { fillTemplateWorkbook, type BuiltFile } from '@report-platform/xlsx';
 
-import { SimpleSalesSummaryXlsxParamsSchema } from './simple-sales-summary-xlsx.contract';
 import {
   type SimpleSalesSummaryXlsxDatasetRotation,
   SimpleSalesSummaryXlsxSourceService,
@@ -24,7 +25,7 @@ import {
   readCrossJoinRows,
 } from './simple-sales-summary-xlsx.template';
 
-export const SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE = 'simple-sales-summary-xlsx';
+export { SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE };
 
 const TEMPLATE_PATH =
   'libs/report-definitions/simple-sales-summary-xlsx/template-assets/pelmeni-cross-join-template.xlsx';
@@ -35,15 +36,7 @@ const reportMetadata: ReportMetadata = {
   description:
     'Template-based XLSX report built from products and channel scenarios with recalculated formulas.',
   minRoleToLaunch: 'TenantAdmin',
-  fields: [],
   externalDependencies: [],
-};
-
-type CreateSimpleSalesSummaryXlsxDefinitionOptions = {
-  productsRepository: ProductsRepository;
-  channelsRepository: ChannelsRepository;
-  datasetRotation: SimpleSalesSummaryXlsxDatasetRotation;
-  templatePath?: string;
 };
 
 function throwValidationError(message: string): never {
@@ -53,9 +46,16 @@ function throwValidationError(message: string): never {
   } satisfies ApiError;
 }
 
+type CreateSimpleSalesSummaryXlsxDefinitionOptions = {
+  productsRepository: ProductsRepository;
+  channelsRepository: ChannelsRepository;
+  datasetRotation: SimpleSalesSummaryXlsxDatasetRotation;
+  templatePath?: string;
+};
+
 export function createSimpleSalesSummaryXlsxDefinition(
   options: CreateSimpleSalesSummaryXlsxDefinitionOptions,
-): ReportDefinition<BuiltFile> {
+): ReportDefinition<SimpleSalesSummaryXlsxLaunchParams, BuiltFile> {
   const sourceService = new SimpleSalesSummaryXlsxSourceService(
     options.productsRepository,
     options.channelsRepository,
@@ -66,22 +66,17 @@ export function createSimpleSalesSummaryXlsxDefinition(
     code: reportMetadata.code,
     title: reportMetadata.title,
     description: reportMetadata.description,
+    launchParamsSchema: SimpleSalesSummaryXlsxLaunchParamsSchema,
     getMetadata(_currentUser: CurrentUser): ReportMetadata {
       return reportMetadata;
     },
     async launch(
       currentUser: CurrentUser,
-      params: unknown,
+      params: SimpleSalesSummaryXlsxLaunchParams,
       launchOptions,
     ): Promise<BuiltFile> {
-      const parsedParams = SimpleSalesSummaryXlsxParamsSchema.safeParse(params);
-
-      if (!parsedParams.success) {
-        throwValidationError('Invalid report params.');
-      }
-
       const source = await sourceService.getSource(currentUser, {
-        datasetKey: parsedParams.data.datasetKey,
+        datasetKey: params.datasetKey,
       });
       launchOptions?.onProgress?.(60);
       const templatePath = resolve(options.templatePath ?? TEMPLATE_PATH);
@@ -99,10 +94,7 @@ export function createSimpleSalesSummaryXlsxDefinition(
             fillCrossJoinSheet(workbook);
           },
           readCalculated(workbook) {
-            return readCrossJoinRows(
-              workbook,
-              source.products.length * source.channels.length,
-            );
+            return readCrossJoinRows(workbook, source.products.length * source.channels.length);
           },
         });
 

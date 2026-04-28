@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { MOCK_USER_HEADER } from '@report-platform/auth';
 import type { Role } from '@report-platform/contracts';
@@ -98,6 +99,7 @@ function createRequest(mockUserId?: string): { headers: Record<string, string> }
 function createReportDefinition(options?: {
   minRoleToLaunch?: Role;
   externalServiceKeys?: string[];
+  launchParamsSchema?: z.ZodTypeAny;
 }): ReportDefinition {
   const externalDependencies = (options?.externalServiceKeys ?? []).map((serviceKey) => ({
     serviceKey,
@@ -109,12 +111,12 @@ function createReportDefinition(options?: {
     code: 'simple-sales-summary',
     title: 'Simple Sales Summary',
     description: 'Testing definition',
+    launchParamsSchema: options?.launchParamsSchema ?? z.object({}).passthrough(),
     getMetadata: vi.fn(() => ({
       code: 'simple-sales-summary',
       title: 'Simple Sales Summary',
       description: 'Testing definition',
       minRoleToLaunch: options?.minRoleToLaunch ?? 'TenantAdmin',
-      fields: [],
       externalDependencies,
     })),
     launch: vi.fn(async () => ({
@@ -213,7 +215,6 @@ describe('ReportsController', () => {
       title: 'Simple Sales Summary',
       description: 'Summary',
       minRoleToLaunch: 'TenantAdmin',
-      fields: [],
       externalDependencies: [],
     });
 
@@ -377,6 +378,31 @@ describe('ReportsController', () => {
       controller.launchReport('simple-sales-summary', {}, createRequest('tenant-admin-1')),
       HttpStatus.BAD_REQUEST,
       { code: 'VALIDATION_ERROR', message: 'Invalid request payload.' },
+    );
+  });
+
+  it('POST /reports/:reportCode/launch returns 400 for invalid params schema', async () => {
+    const { controller, registryMock } = createController();
+
+    registryMock.getReport.mockReturnValue(
+      createReportDefinition({
+        launchParamsSchema: z.object({
+          tenantId: z.string().trim().min(1),
+        }),
+      }),
+    );
+
+    await expectHttpException(
+      controller.launchReport(
+        'simple-sales-summary',
+        { params: { organizationId: 'org-1' } },
+        createRequest('tenant-admin-1'),
+      ),
+      HttpStatus.BAD_REQUEST,
+      {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid launch params for selected report.',
+      },
     );
   });
 

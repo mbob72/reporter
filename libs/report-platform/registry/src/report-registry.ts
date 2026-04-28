@@ -5,6 +5,7 @@ import type {
   ReportMetadata,
 } from '@report-platform/contracts';
 import { ReportCodeSchema } from '@report-platform/contracts';
+import type { z } from 'zod';
 
 import { buildReportList } from './report-list';
 
@@ -12,16 +13,17 @@ export type ReportLaunchOptions = {
   onProgress?: (progressPercent: number) => void;
 };
 
-export type ReportDefinition<TResult = unknown> = {
+export type ReportDefinition<TLaunchParams = unknown, TResult = unknown> = {
   code: ReportCode;
   title: string;
   description: string;
-  getMetadata: (currentUser: CurrentUser) => ReportMetadata;
-  launch: (
+  launchParamsSchema: z.ZodType<TLaunchParams>;
+  getMetadata(currentUser: CurrentUser): ReportMetadata;
+  launch(
     currentUser: CurrentUser,
-    params: unknown,
+    params: TLaunchParams,
     options?: ReportLaunchOptions,
-  ) => Promise<TResult>;
+  ): Promise<TResult>;
 };
 
 export class ReportRegistry {
@@ -65,10 +67,7 @@ export class ReportRegistry {
     );
   }
 
-  getReportMetadata(
-    reportCode: string,
-    currentUser?: CurrentUser,
-  ): ReportMetadata | undefined {
+  getReportMetadata(reportCode: string, currentUser?: CurrentUser): ReportMetadata | undefined {
     const reportDefinition = this.getReport(reportCode);
 
     if (!reportDefinition) {

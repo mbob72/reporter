@@ -7,6 +7,7 @@ import type {
   Step4ResultModel,
   StepperDemoScenario,
 } from './types';
+import type { SimpleSalesSummaryLaunchParams } from '@report-platform/contracts';
 
 export const mockLauncherUsers: LauncherUser[] = [
   {
@@ -80,103 +81,55 @@ export const mockReportSelectionItems: ReportSelectionItem[] = [
   },
 ];
 
-export const defaultLaunchConfiguration: LaunchConfigurationModel = {
-  reportCode: 'weather-anomaly-export',
-  reportTitle: 'Weather Anomaly Export',
-  reportDescription:
-    'Builds XLSX report that enriches tenant sales with OpenWeather metrics by region.',
-  contextSummary:
-    'Execution context: tenant mode (tenant-alpha), initiator role TenantAdmin.',
-  constraints: [
-    {
-      id: 'c-1',
-      label: 'Role gate',
-      details: 'Minimum role: TenantAdmin',
-      severity: 'info',
-    },
-    {
-      id: 'c-2',
-      label: 'Scope gate',
-      details: 'Requires tenant scope, organization scope is optional.',
-      severity: 'warning',
-    },
-    {
-      id: 'c-3',
-      label: 'Dependency',
-      details: 'Requires OpenWeather credentials at launch time.',
-      severity: 'critical',
-    },
-  ],
-  parameterFields: [
-    {
-      key: 'period',
-      label: 'Reporting period',
-      placeholder: '2026-03',
-      value: '2026-03',
-      required: true,
-      helperText: 'Use YYYY-MM format.',
-    },
-    {
-      key: 'region',
-      label: 'Region filter',
-      placeholder: 'EU-Central',
-      value: 'EU-Central',
-    },
-  ],
-  credentials: {
-    manualLabel: 'Manual API key',
-    sharedLabel: 'Shared setting',
-    defaultMode: 'manual',
-    manualApiKey: '',
-    sharedSettings: [
-      {
-        id: 'openweather-prod',
-        label: 'OpenWeather / Production',
-        description: 'Managed by Platform team, rotated every 30 days.',
-      },
-      {
-        id: 'openweather-staging',
-        label: 'OpenWeather / Staging',
-        description: 'Lower quota, safe for smoke runs.',
-      },
-    ],
-    selectedSharedSettingId: 'openweather-prod',
-  },
-  canLaunch: true,
-  externalDependency: 'OpenWeather API key',
-};
-
-export const step2StoryStates = {
-  withoutExternalDependency: {
-    ...defaultLaunchConfiguration,
+export const defaultLaunchConfiguration: LaunchConfigurationModel<SimpleSalesSummaryLaunchParams> =
+  {
     reportCode: 'simple-sales-summary',
     reportTitle: 'Simple Sales Summary',
-    reportDescription: 'Basic tenant report with no external dependencies.',
+    reportDescription: 'Builds XLSX report that enriches tenant sales with OpenWeather metrics.',
+    contextSummary: 'Execution context: tenant mode (tenant-alpha), initiator role TenantAdmin.',
+    constraints: [
+      {
+        id: 'c-1',
+        label: 'Role gate',
+        details: 'Minimum role: TenantAdmin',
+        severity: 'info',
+      },
+      {
+        id: 'c-2',
+        label: 'Scope gate',
+        details: 'Requires tenant scope, organization scope is optional.',
+        severity: 'warning',
+      },
+      {
+        id: 'c-3',
+        label: 'Dependency',
+        details: 'Requires OpenWeather credentials at launch time.',
+        severity: 'critical',
+      },
+    ],
+    canLaunch: true,
+    initialValues: {
+      tenantId: 'tenant-alpha',
+      organizationId: 'org-north',
+      credentials: {
+        mode: 'manual',
+        apiKey: '',
+      },
+    },
+  };
+
+export const step2StoryStates = {
+  readyToLaunch: {
+    ...defaultLaunchConfiguration,
+  },
+  noExternalDependency: {
+    ...defaultLaunchConfiguration,
+    reportCode: 'simple-sales-summary-xlsx',
+    reportTitle: 'Pelmeni Product × Channel Matrix XLSX',
     constraints: defaultLaunchConfiguration.constraints.filter(
       (constraint) => constraint.id !== 'c-3',
     ),
-    externalDependency: undefined,
-    credentials: {
-      ...defaultLaunchConfiguration.credentials,
-      sharedSettings: [],
-      defaultMode: 'manual' as const,
-    },
-  },
-  withManualCredentials: {
-    ...defaultLaunchConfiguration,
-    credentials: {
-      ...defaultLaunchConfiguration.credentials,
-      defaultMode: 'manual' as const,
-      manualApiKey: 'ow-demo-1234',
-    },
-  },
-  withSharedSetting: {
-    ...defaultLaunchConfiguration,
-    credentials: {
-      ...defaultLaunchConfiguration.credentials,
-      defaultMode: 'shared_setting' as const,
-      selectedSharedSettingId: 'openweather-prod',
-    },
+    initialValues: {},
   },
   forbiddenLaunch: {
     ...defaultLaunchConfiguration,
@@ -184,9 +137,10 @@ export const step2StoryStates = {
     disabledReason:
       'Недостаточно прав: для выбранного отчета нужен organization scope и роль Admin.',
   },
-  validationError: {
+  metadataLoading: {
     ...defaultLaunchConfiguration,
-    forcedValidationMessage: 'Введите API key в manual mode перед запуском.',
+    canLaunch: false,
+    disabledReason: 'Loading report metadata...',
   },
 };
 
@@ -203,9 +157,7 @@ export const step3StoryStates: Record<string, RunProgressSnapshot> = {
     stageLabel: 'Waiting for worker slot',
     progress: 0,
     stages: [{ ...baseStages[0], status: 'active' }, ...baseStages.slice(1)],
-    diagnostics: [
-      { id: 'diag-q1', level: 'info', message: 'Job accepted by launcher service.' },
-    ],
+    diagnostics: [{ id: 'diag-q1', level: 'info', message: 'Job accepted by launcher service.' }],
   },
   running20: {
     status: 'running',
@@ -246,9 +198,7 @@ export const step3StoryStates: Record<string, RunProgressSnapshot> = {
       { ...baseStages[2], status: 'failed' },
       { ...baseStages[3], status: 'pending' },
     ],
-    diagnostics: [
-      { id: 'diag-f1', level: 'error', message: 'OpenWeather key rejected (401).' },
-    ],
+    diagnostics: [{ id: 'diag-f1', level: 'error', message: 'OpenWeather key rejected (401).' }],
     failureMessage: 'Launch failed: external dependency credentials are invalid.',
   },
   completed: {
@@ -360,7 +310,7 @@ export const stepperScenarios: Record<string, StepperDemoScenario> = {
     initialSelectedReportCode: 'weather-anomaly-export',
     users: mockLauncherUsers,
     reports: mockReportSelectionItems,
-    launchConfiguration: step2StoryStates.withManualCredentials,
+    launchConfiguration: step2StoryStates.readyToLaunch,
     progressTimeline: [
       step3StoryStates.queued,
       step3StoryStates.running20,
@@ -391,7 +341,7 @@ export const stepperScenarios: Record<string, StepperDemoScenario> = {
     initialSelectedReportCode: 'weather-anomaly-export',
     users: mockLauncherUsers,
     reports: mockReportSelectionItems,
-    launchConfiguration: step2StoryStates.withSharedSetting,
+    launchConfiguration: step2StoryStates.readyToLaunch,
     progressTimeline: [
       step3StoryStates.queued,
       step3StoryStates.running20,
@@ -408,7 +358,7 @@ export const stepperScenarios: Record<string, StepperDemoScenario> = {
     initialSelectedReportCode: 'weather-anomaly-export',
     users: mockLauncherUsers,
     reports: mockReportSelectionItems,
-    launchConfiguration: step2StoryStates.withSharedSetting,
+    launchConfiguration: step2StoryStates.readyToLaunch,
     progressTimeline: [step3StoryStates.completed],
     result: step4StoryStates.withRecentArtifacts,
   },
@@ -421,8 +371,12 @@ export const stepperScenarios: Record<string, StepperDemoScenario> = {
     initialSelectedReportCode: 'weather-anomaly-export',
     users: mockLauncherUsers,
     reports: mockReportSelectionItems,
-    launchConfiguration: step2StoryStates.withManualCredentials,
-    progressTimeline: [step3StoryStates.queued, step3StoryStates.running20, step3StoryStates.failed],
+    launchConfiguration: step2StoryStates.readyToLaunch,
+    progressTimeline: [
+      step3StoryStates.queued,
+      step3StoryStates.running20,
+      step3StoryStates.failed,
+    ],
     result: step4StoryStates.brokenLink,
   },
 };
