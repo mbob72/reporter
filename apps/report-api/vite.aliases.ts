@@ -15,14 +15,8 @@ export const reportApiAliases: AliasOptions = {
   '@report-platform/xlsx': fileURLToPath(
     new URL('../../libs/report-platform/xlsx/src/index.ts', import.meta.url),
   ),
-  '@report-platform/file-store': fileURLToPath(
-    new URL('../../libs/report-platform/file-store/src/index.ts', import.meta.url),
-  ),
   '@report-platform/registry': fileURLToPath(
     new URL('../../libs/report-platform/registry/src/index.ts', import.meta.url),
-  ),
-  '@report-platform/api-client': fileURLToPath(
-    new URL('../../libs/report-platform/api-client/src/index.ts', import.meta.url),
   ),
   '@report-platform/external-api': fileURLToPath(
     new URL('../../libs/report-platform/external-api/src/index.ts', import.meta.url),
