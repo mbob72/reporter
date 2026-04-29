@@ -4,7 +4,7 @@
 
 - Этот файл является каноническим описанием архитектуры.
 - Изменения в коде, влияющие на архитектуру и контракты, должны сопровождаться обновлением этого файла.
-- Текущая версия отражает состояние репозитория на `2026-04-23`.
+- Текущая версия отражает состояние репозитория на `2026-04-29`.
 - Архитектурное описание централизовано здесь, чтобы избежать дублирования и расхождения документов.
 
 ## Legacy-термины (миграция API)
@@ -48,56 +48,38 @@ type ReportExecutionContext = {
 - Контроль доступа к данным выполняется на уровне repository-слоя.
 - Репозитории уже отделены от отчетов интерфейсами, поэтому миграция `CurrentUser -> ReportExecutionContext` может быть сделана эволюционно, без массовой переписи отчетов.
 
-### 1.3 Компоненты
+### 1.3 Блоки (актуальная схема)
 
-1. `apps/report-web`
+Ниже блоки, которые используются в runtime-сценариях платформы:
 
-- React + Router + RTK Query.
-- UX-поток: выбор отчета, конфигурация, прогресс, результат.
-- URL является источником состояния запуска (`/report-runs/:reportInstanceId`).
+1. `Frontend`
 
-2. `apps/report-api`
+- Реализация: `apps/report-web`.
+- Ответственность: UX flow Step1/Step2/Step3/Step4, вызовы API через RTK Query.
 
-- NestJS API.
-- Публичные точки: каталог отчетов, metadata, launch, status, history, download.
-- Оркестрирует асинхронный запуск и хранение состояния.
+2. `Report API`
 
-3. `libs/report-platform/registry`
+- Реализация: `apps/report-api`.
+- Ответственность: публичные endpoints (`/reports`, `/launch`, `/report-runs`, `/generated-files`), валидация и оркестрация запуска.
 
-- Единая точка регистрации отчетов.
-- Обеспечивает generic запуск по `reportCode`, без if/switch в контроллерах.
+3. `Report Definitions`
 
-4. `libs/report-platform/contracts`
+- Реализация: `libs/report-definitions/*`.
+- Ответственность: metadata отчета, `launchParamsSchema`, бизнес-логика source/service, генерация результата.
 
-- Контракты API и runtime-сущностей на `zod`.
-- Единый контракт между backend и frontend.
+4. `Repos & External API`
 
-5. `libs/report-platform/data-access`
+- Реализация: `libs/report-platform/data-access` + `libs/report-platform/external-api`.
+- Ответственность: внутренние данные (tenant/org/sales/products/channels), внешние интеграции, credential flow, resilience.
 
-- Интерфейсы доступа к внутренним данным.
-- Текущие реализации mock, но с реальными проверками scope.
+5. `XLSX Builder, registry`
 
-6. `libs/report-platform/external-api`
+- Реализация: `libs/report-platform/xlsx` + `libs/report-platform/registry` + сборка реестра в `apps/report-api/src/report-registry.factory.ts`.
+- Ответственность: реестр report definitions, generic запуск по `reportCode`, формирование XLSX-файлов.
 
-- Factory для внешних клиентов.
-- Shared settings provider, режимы credential input, resilience helper.
-- Поддерживаются ручной ввод credentials и ссылка на shared setting для внешних ресурсов.
+Примечание по `contracts`:
 
-7. `libs/report-platform/xlsx`
-
-- Runtime для шаблонного XLSX, включая пересчет формул через LibreOffice.
-
-8. `libs/report-definitions/*`
-
-- Отдельные пакеты отчетов.
-- Каждый отчет владеет metadata, params schema, source/service/template логикой.
-- `template` — это `.xlsx` файл, который описывает модель производных данных в отчете.
-- При формировании отчета template копируется, заполняется исходными данными и пересчитывается через LibreOffice.
-
-9. `apps/report-api/src/report-instance.store.ts`
-
-- File-system persistence для instance metadata (`meta.json`) и артефакта (`artifact.bin`).
-- Это хранилище состояния запусков и их файловых артефактов.
+- `libs/report-platform/contracts` остается кросс-срезом между frontend/backend, но в текущей блок-схеме не выделяется как самостоятельный runtime-блок.
 
 ### 1.4 Потоки данных
 
@@ -123,17 +105,16 @@ type ReportExecutionContext = {
 #### 1.4.3 Логическая схема
 
 ```text
-Browser (report-web)
-  -> report-api controllers
-  -> ReportInstanceRunner
-  -> Worker process
-  -> ReportRegistry
-  -> ReportDefinition
-      -> data-access repositories
-      -> external-api clients
-      -> xlsx template runtime
-  -> FileSystemReportInstanceStore (meta.json + artifact.bin)
+Frontend
+  -> Report API
+  -> XLSX Builder, registry
+  -> Report Definitions
+      -> Repos & External API
+      -> XLSX Builder, registry
+  -> Report API (status/history/download)
 ```
+
+Детализация с код-ссылками: [docs/report-runtime-call-chain.md](./docs/report-runtime-call-chain.md).
 
 ### 1.5 Границы ответственности
 
@@ -150,7 +131,8 @@ Browser (report-web)
 
 - бизнес-логику и сбор source-данных;
 - mapping данных в результат;
-- metadata (`fields`, `minRoleToLaunch`, `externalDependencies`);
+- metadata (`code`, `title`, `description`, `minRoleToLaunch`, `externalDependencies`);
+- launch-контракт (`launchParamsSchema` и типизированные launch params);
 - правила fallback/criticality для внешних зависимостей.
 - разделение асинхронных операций на `critical` и `non-critical`.
 - `critical`: падение операции приводит к падению сборки отчета.
@@ -173,7 +155,6 @@ Browser (report-web)
 
 ```text
 src/
-  <report-code>.contract.ts
   <report-code>.source.ts
   <report-code>.service.ts
   <report-code>.definition.ts
@@ -182,17 +163,24 @@ template-assets/
   <template>.xlsx
 ```
 
-Если отчет не файловый, `template-assets` и XLSX-слой не обязательны.
+Если отчет не файловый, `template-assets` и XLSX-слой не обязательны. Локальный `<report-code>.contract.ts` в `report-definitions` допустим для source/result схем, но launch params должны жить в platform contracts.
 
 ### 2.2 Описать контракты
 
-В `<report-code>.contract.ts`:
+Launch params описываются в:
 
-- `ParamsSchema`;
-- типы params/result через `z.infer`;
-- при необходимости schema для source/result.
+`libs/report-platform/contracts/src/reports/<report-code>.contract.ts`
 
-Требование: `launch` валидирует вход через schema, ошибки валидации возвращаются как `ApiError` с `code: 'VALIDATION_ERROR'`.
+В контракте должны быть:
+
+- `REPORT_CODE` константа;
+- `LaunchParamsSchema`;
+- `LaunchParams` тип через `z.infer`.
+
+Экспорт обязателен через:
+
+- `libs/report-platform/contracts/src/reports/index.ts`
+- `libs/report-platform/contracts/src/index.ts`.
 
 ### 2.3 Реализовать source/service
 
@@ -213,16 +201,21 @@ template-assets/
 В `.definition.ts` верните `ReportDefinition`:
 
 - `code`, `title`, `description`;
+- `launchParamsSchema`;
 - `getMetadata(currentUser)`;
 - `launch(currentUser, params, options?)`.
 
+Требование:
+
+- `launch` принимает уже типизированные `params` (`TLaunchParams`).
+- Серверная валидация происходит в `Report API` через `reportDefinition.launchParamsSchema` до вызова раннера.
+
 Рекомендуемый порядок в `launch`:
 
-1. parse params;
-2. подготовка зависимостей;
-3. запуск service/source;
-4. валидация результата;
-5. возврат результата.
+1. подготовка зависимостей;
+2. запуск service/source;
+3. валидация результата;
+4. возврат результата.
 
 ### 2.5 Зарегистрировать отчет в registry
 
@@ -240,10 +233,10 @@ template-assets/
 
 Базовый runtime уже generic. Для нового отчета нужно:
 
-1. Убедиться, что metadata корректно описывает fields/dependencies.
-2. Дополнить mapping/рендер в step2, если нужен специфический UX-блок.
-3. Проверить launch payload на соответствие `ParamsSchema`.
-4. Проверить навигацию на `/report-runs/:reportInstanceId`.
+1. Добавить report-specific Step2 компонент в `apps/report-web/src/features/report-launcher-runtime/containers/step2/components/`.
+2. Добавить его в `reportStep2Registry` (`apps/report-web/src/features/report-launcher-runtime/containers/step2/reportStep2Registry.ts`).
+3. Использовать `LaunchParamsSchema` в форме и отправлять typed `ReportLaunchDraft`.
+4. Проверить launch payload и навигацию на `/report-runs/:reportInstanceId`.
 
 ### 2.7 Проверка сценария вручную
 

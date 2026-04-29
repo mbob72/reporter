@@ -6,6 +6,9 @@
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - основной архитектурный документ (source of truth).
 - [docs/how-to-add-report.md](./docs/how-to-add-report.md) - пошаговая инструкция добавления нового отчета.
+- [docs/report-runtime-call-chain.md](./docs/report-runtime-call-chain.md) - сценарии вызовов между архитектурными блоками.
+- [docs/frontend-backend-block-separation.md](./docs/frontend-backend-block-separation.md) - изменения по блокам Frontend/Backend.
+- [docs/release-notes.md](./docs/release-notes.md) - журнал релизных изменений.
 - [docs/deployment.md](./docs/deployment.md) - deploy-контур и ограничения текущего CI/CD.
 - [docs/external-dependency-resilience.md](./docs/external-dependency-resilience.md) - retries/fallback для внешних API.
 
@@ -199,7 +202,6 @@ libs/
     external-api/
     registry/
     xlsx/
-    api-client/
   report-definitions/
     simple-sales-summary/
     simple-sales-summary-xlsx/
@@ -207,7 +209,10 @@ libs/
 docs/
   deployment.md
   external-dependency-resilience.md
+  frontend-backend-block-separation.md
   how-to-add-report.md
+  release-notes.md
+  report-runtime-call-chain.md
 ```
 
 ## Важные ограничения текущей версии

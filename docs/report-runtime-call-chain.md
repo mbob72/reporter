@@ -1,7 +1,7 @@
 # Сценарии Между Архитектурными Блоками
 
 Блоки в этом описании:
-`Frontend` / `Report API` / `Report Defenitions` / `Repos & External API` / `XLSX Builder, registry`.
+`Frontend` / `Report API` / `Report Definitions` / `Repos & External API` / `XLSX Builder, registry`.
 
 `Contracts` намеренно не учитывается.
 
@@ -21,7 +21,7 @@
    [`report-registry.ts#L54`](../libs/report-platform/registry/src/report-registry.ts#L54),
    [`report-registry.ts#L58`](../libs/report-platform/registry/src/report-registry.ts#L58).
 
-3. `XLSX Builder, registry -> Report Defenitions` (реестр берет метаданные/report definition):
+3. `XLSX Builder, registry -> Report Definitions` (реестр берет метаданные/report definition):
    [`report-list.ts#L8`](../libs/report-platform/registry/src/report-list.ts#L8),
    [`report-list.ts#L12`](../libs/report-platform/registry/src/report-list.ts#L12),
    [`report-registry.ts#L71`](../libs/report-platform/registry/src/report-registry.ts#L71),
@@ -69,14 +69,14 @@
    [`report-registry.factory.ts#L34`](../apps/report-api/src/report-registry.factory.ts#L34),
    [`report-launch.executor.ts#L24`](../apps/report-api/src/report-launch.executor.ts#L24).
 
-3. `XLSX Builder, registry -> Report Defenitions` (выбор definition и запуск `launch`):
+3. `XLSX Builder, registry -> Report Definitions` (выбор definition и запуск `launch`):
    [`report-registry.factory.ts#L38`](../apps/report-api/src/report-registry.factory.ts#L38),
    [`report-registry.factory.ts#L43`](../apps/report-api/src/report-registry.factory.ts#L43),
    [`report-launch.executor.ts#L43`](../apps/report-api/src/report-launch.executor.ts#L43),
    [`simple-sales-summary.definition.ts#L53`](../libs/report-definitions/simple-sales-summary/src/simple-sales-summary.definition.ts#L53),
    [`simple-sales-summary-xlsx.definition.ts#L73`](../libs/report-definitions/simple-sales-summary-xlsx/src/simple-sales-summary-xlsx.definition.ts#L73).
 
-4. `Report Defenitions -> Repos & External API`:
+4. `Report Definitions -> Repos & External API`:
    [`simple-sales-summary.definition.ts#L58`](../libs/report-definitions/simple-sales-summary/src/simple-sales-summary.definition.ts#L58),
    [`simple-sales-summary.source.ts#L99`](../libs/report-definitions/simple-sales-summary/src/simple-sales-summary.source.ts#L99),
    [`simple-sales-summary.source.ts#L136`](../libs/report-definitions/simple-sales-summary/src/simple-sales-summary.source.ts#L136),
@@ -88,7 +88,7 @@
    [`open-weather.client.ts#L88`](../libs/report-platform/external-api/src/open-weather.client.ts#L88),
    [`execute-with-resilience.ts#L79`](../libs/report-platform/external-api/src/execute-with-resilience.ts#L79).
 
-5. `Report Defenitions -> XLSX Builder, registry` (построение XLSX):
+5. `Report Definitions -> XLSX Builder, registry` (построение XLSX):
    [`simple-sales-summary.service.ts#L43`](../libs/report-definitions/simple-sales-summary/src/simple-sales-summary.service.ts#L43),
    [`simple-sales-summary-xlsx.definition.ts#L88`](../libs/report-definitions/simple-sales-summary-xlsx/src/simple-sales-summary-xlsx.definition.ts#L88),
    [`template-runtime.ts#L172`](../libs/report-platform/xlsx/src/template-runtime.ts#L172).
