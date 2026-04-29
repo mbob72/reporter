@@ -83,11 +83,21 @@ function buildSimpleSalesInitialValues(params: {
 function buildSimpleSalesXlsxInitialValues(params: {
   launchDraft: ReportLaunchDraft | null;
 }): SimpleSalesSummaryXlsxLaunchParams {
-  if (params.launchDraft?.reportCode !== SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE) {
-    return {};
-  }
+  const previousDraft =
+    params.launchDraft?.reportCode === SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE
+      ? params.launchDraft.params
+      : undefined;
 
-  return params.launchDraft.params;
+  return {
+    name: previousDraft?.name ?? '',
+    job: previousDraft?.job ?? '',
+    email: previousDraft?.email ?? '',
+    favoriteColor: previousDraft?.favoriteColor ?? '',
+    age: previousDraft?.age ?? 18,
+    website: previousDraft?.website ?? '',
+    role: previousDraft?.role ?? 'developer',
+    datasetKey: previousDraft?.datasetKey,
+  };
 }
 
 export function useStep2LaunchConfigurationViewModel({

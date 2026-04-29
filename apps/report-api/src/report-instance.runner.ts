@@ -189,7 +189,10 @@ export class ReportInstanceRunner {
       return params;
     }
 
-    const datasetKey = this.datasetRotation.nextDatasetKey();
+    const datasetKey =
+      typeof params.datasetKey === 'string' && params.datasetKey.trim().length > 0
+        ? params.datasetKey
+        : this.datasetRotation.nextDatasetKey();
 
     return {
       ...params,

@@ -81,12 +81,21 @@ libs/report-platform/contracts/src/reports/<report-code>.contract.ts
 - производные вычисления остаются в формулах template;
 - TypeScript код заполняет исходные данные и возвращает файл.
 
+Не забудьте про сборку `report-api`:
+
+- добавьте копирование `template-assets` нового отчета в build-команду
+  `apps/report-api/project.json` (иначе template не попадет в `dist`).
+
 ## 6. Зарегистрировать отчет в backend
 
 Обновите:
 
 - `apps/report-api/src/report-registry.factory.ts` — добавить `create<ReportName>Definition(...)` в `createReportRegistry(...)`;
 - `apps/report-api/src/reporting.providers.ts` — добавить/подключить новые зависимости при необходимости.
+- алиасы для нового definition-пакета:
+  - `tsconfig.base.json` (`compilerOptions.paths`);
+  - `apps/report-api/vite.aliases.ts`;
+  - `apps/report-web/vite.aliases.ts`.
 
 Без регистрации в `ReportRegistry` отчет не появится в API.
 
@@ -100,6 +109,12 @@ libs/report-platform/contracts/src/reports/<report-code>.contract.ts
 2. Добавьте Step2-компонент в `apps/report-web/src/features/report-launcher-runtime/containers/step2/components/`.
 3. Зарегистрируйте компонент в `apps/report-web/src/features/report-launcher-runtime/containers/step2/reportStep2Registry.ts`.
 4. Внутри формы валидируйте данные через соответствующий `LaunchParamsSchema` и отправляйте `ReportLaunchDraft`.
+5. Добавьте ветку нового `reportCode` в
+   `apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchConfigurationViewModel.ts`
+   и верните `initialValues`/доп. конфигурацию для формы.
+6. Расширьте union `ReportLaunchDraft` в
+   `apps/report-web/src/features/report-launcher-runtime/store/launcherSlice.ts`
+   под новый `reportCode` и тип `params`.
 
 ## 8. Проверить runtime flow
 
@@ -116,5 +131,8 @@ libs/report-platform/contracts/src/reports/<report-code>.contract.ts
 - `ReportDefinition` использует typed `launchParamsSchema` и typed `launch` params.
 - Source/service не обходят `data-access` и `external-api` слои.
 - Для нового `reportCode` есть Step2 компонент и запись в `reportStep2Registry`.
+- Для нового `reportCode` добавлена ветка в `useStep2LaunchConfigurationViewModel` и тип в `ReportLaunchDraft`.
+- Обновлены alias-paths (`tsconfig.base.json`, `apps/report-api/vite.aliases.ts`, `apps/report-web/vite.aliases.ts`).
+- Для XLSX-отчета обновлен build `report-api` с копированием новых `template-assets`.
 - Добавлены/обновлены тесты (definition/source/service/Step2/API).
 - Пройдены `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.

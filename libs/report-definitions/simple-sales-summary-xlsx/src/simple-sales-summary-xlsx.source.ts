@@ -1,4 +1,5 @@
-import type { CurrentUser } from '@report-platform/contracts';
+import type { CurrentUser, SimpleSalesSummaryXlsxDatasetKey } from '@report-platform/contracts';
+import { SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS as CONTRACT_DATASET_KEYS } from '@report-platform/contracts';
 import type {
   ChannelTemplateRow,
   ChannelsRepository,
@@ -6,14 +7,10 @@ import type {
   ProductsRepository,
 } from '@report-platform/data-access';
 
-export const SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS = [
-  'winter_base',
-  'holiday_spike',
-  'margin_protection',
-] as const;
+export const SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS = CONTRACT_DATASET_KEYS;
 
 export interface SimpleSalesSummaryXlsxDatasetRotation {
-  nextDatasetKey(): string;
+  nextDatasetKey(): SimpleSalesSummaryXlsxDatasetKey;
 }
 
 export class InMemorySimpleSalesSummaryXlsxDatasetRotation
@@ -21,13 +18,13 @@ export class InMemorySimpleSalesSummaryXlsxDatasetRotation
 {
   private nextIndex = 0;
 
-  constructor(private readonly datasetKeys: readonly string[]) {
+  constructor(private readonly datasetKeys: readonly SimpleSalesSummaryXlsxDatasetKey[]) {
     if (datasetKeys.length === 0) {
       throw new Error('Dataset rotation requires at least one dataset key.');
     }
   }
 
-  nextDatasetKey(): string {
+  nextDatasetKey(): SimpleSalesSummaryXlsxDatasetKey {
     const datasetKey = this.datasetKeys[this.nextIndex];
 
     this.nextIndex = (this.nextIndex + 1) % this.datasetKeys.length;
@@ -37,7 +34,7 @@ export class InMemorySimpleSalesSummaryXlsxDatasetRotation
 }
 
 export type SimpleSalesSummaryXlsxSource = {
-  datasetKey: string;
+  datasetKey: SimpleSalesSummaryXlsxDatasetKey;
   products: ProductTemplateRow[];
   channels: ChannelTemplateRow[];
 };
@@ -51,7 +48,7 @@ export class SimpleSalesSummaryXlsxSourceService {
 
   async getSource(
     currentUser: CurrentUser,
-    params?: { datasetKey?: string },
+    params?: { datasetKey?: SimpleSalesSummaryXlsxDatasetKey },
   ): Promise<SimpleSalesSummaryXlsxSource> {
     const datasetKey = params?.datasetKey ?? this.datasetRotation.nextDatasetKey();
     const [products, channels] = await Promise.all([

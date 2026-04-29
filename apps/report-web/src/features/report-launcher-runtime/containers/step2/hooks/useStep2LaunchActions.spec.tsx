@@ -155,7 +155,15 @@ describe('useStep2LaunchActions', () => {
     const { result } = renderHook(() => useStep2LaunchActions());
     const mismatchedDraft: ReportLaunchDraft = {
       reportCode: SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
-      params: {},
+      params: {
+        name: 'Pavel',
+        job: 'Engineer',
+        email: 'pavel@example.com',
+        favoriteColor: '#abc',
+        age: 30,
+        website: 'https://example.com',
+        role: 'developer',
+      },
     };
 
     await act(async () => {

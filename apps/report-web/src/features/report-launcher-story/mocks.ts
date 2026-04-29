@@ -8,6 +8,7 @@ import type {
   StepperDemoScenario,
 } from './types';
 import type { SimpleSalesSummaryLaunchParams } from '@report-platform/contracts';
+import { SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS } from '@report-platform/contracts';
 
 export const mockLauncherUsers: LauncherUser[] = [
   {
@@ -129,7 +130,16 @@ export const step2StoryStates = {
     constraints: defaultLaunchConfiguration.constraints.filter(
       (constraint) => constraint.id !== 'c-3',
     ),
-    initialValues: {},
+    initialValues: {
+      name: 'Pavel',
+      job: 'Engineer',
+      email: 'pavel@example.com',
+      favoriteColor: '#abc',
+      age: 30,
+      website: 'https://example.com',
+      role: 'developer',
+      datasetKey: SIMPLE_SALES_SUMMARY_XLSX_DATASET_KEYS[0],
+    },
   },
   forbiddenLaunch: {
     ...defaultLaunchConfiguration,

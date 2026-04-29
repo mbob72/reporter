@@ -66,7 +66,7 @@ function createStoreMock(): StoreMock {
 
 function createDatasetRotationMock(): SimpleSalesSummaryXlsxDatasetRotation {
   return {
-    nextDatasetKey: vi.fn(() => 'dataset-42'),
+    nextDatasetKey: vi.fn(() => 'winter_base'),
   };
 }
 
@@ -128,7 +128,7 @@ describe('ReportInstanceRunner', () => {
     });
   });
 
-  it('adds datasetKey only for simple-sales-summary-xlsx report', async () => {
+  it('adds auto-rotated datasetKey for simple-sales-summary-xlsx when datasetKey is missing', async () => {
     const child = new FakeChildProcess();
     const storeMock = createStoreMock();
     const datasetRotation = createDatasetRotationMock();
@@ -145,9 +145,30 @@ describe('ReportInstanceRunner', () => {
     const startMessage = getSentStartMessage(child);
     expect(startMessage.params).toEqual({
       foo: 'bar',
-      datasetKey: 'dataset-42',
+      datasetKey: 'winter_base',
     });
     expect(datasetRotation.nextDatasetKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps provided datasetKey for simple-sales-summary-xlsx report', async () => {
+    const child = new FakeChildProcess();
+    const storeMock = createStoreMock();
+    const datasetRotation = createDatasetRotationMock();
+    const runner = createRunner(storeMock, datasetRotation);
+
+    forkMock.mockReturnValue(child as unknown as ChildProcess);
+
+    await runner.start({
+      reportCode: SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE,
+      currentUser: createCurrentUser(),
+      params: { datasetKey: 'winter_base' },
+    });
+
+    const startMessage = getSentStartMessage(child);
+    expect(startMessage.params).toEqual({
+      datasetKey: 'winter_base',
+    });
+    expect(datasetRotation.nextDatasetKey).not.toHaveBeenCalled();
   });
 
   it('does not modify params for other report codes', async () => {
