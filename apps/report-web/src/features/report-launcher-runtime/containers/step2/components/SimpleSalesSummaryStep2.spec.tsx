@@ -7,6 +7,26 @@ import { SIMPLE_SALES_SUMMARY_REPORT_CODE } from '@report-platform/contracts';
 import { SimpleSalesSummaryStep2 } from './SimpleSalesSummaryStep2';
 import type { SimpleSalesSummaryStep2Configuration } from '../types';
 
+vi.mock('../../../api/reportApi', () => ({
+  useListSharedSettingsQuery: () => ({
+    data: [
+      {
+        id: 'setting-1',
+        label: 'Setting 1',
+        serviceKey: 'openWeather',
+      },
+      {
+        id: 'setting-2',
+        label: 'Setting 2',
+        serviceKey: 'openWeather',
+      },
+    ],
+    isLoading: false,
+    isFetching: false,
+    error: undefined,
+  }),
+}));
+
 describe('SimpleSalesSummaryStep2', () => {
   const baseConfiguration: SimpleSalesSummaryStep2Configuration = {
     reportCode: SIMPLE_SALES_SUMMARY_REPORT_CODE,
@@ -23,20 +43,7 @@ describe('SimpleSalesSummaryStep2', () => {
         apiKey: '',
       },
     },
-    sharedSettings: [
-      {
-        id: 'setting-1',
-        label: 'Setting 1',
-        description: 'Shared setting 1',
-      },
-      {
-        id: 'setting-2',
-        label: 'Setting 2',
-        description: 'Shared setting 2',
-      },
-    ],
-    sharedSettingsLoading: false,
-    sharedSettingsEmptyReason: undefined,
+    externalDependencyServiceKey: 'openWeather',
   };
 
   it('submits shared setting draft and handles back button click', async () => {

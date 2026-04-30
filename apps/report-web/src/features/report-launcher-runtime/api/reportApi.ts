@@ -1,7 +1,4 @@
-import {
-  createApi,
-  fetchBaseQuery,
-} from '@reduxjs/toolkit/query/react';
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { z } from 'zod';
 
 import { MOCK_USER_HEADER } from '@report-platform/auth';
@@ -12,6 +9,7 @@ import {
   ReportLaunchAcceptedSchema,
   ReportListResponseSchema,
   ReportMetadataSchema,
+  SIMPLE_SALES_SUMMARY_REPORT_CODE,
   SharedSettingOptionListSchema,
   type LaunchReportParams,
   type ReportInstance,
@@ -39,11 +37,7 @@ const OrganizationOptionListSchema = z.array(OrganizationOptionSchema);
 export type TenantOption = z.infer<typeof TenantOptionSchema>;
 export type OrganizationOption = z.infer<typeof OrganizationOptionSchema>;
 
-function parseWithSchema<T>(
-  schema: z.ZodType<T>,
-  payload: unknown,
-  message: string,
-): T {
+function parseWithSchema<T>(schema: z.ZodType<T>, payload: unknown, message: string): T {
   const parsed = schema.safeParse(payload);
 
   if (!parsed.success) {
@@ -81,11 +75,7 @@ export const reportApi = createApi({
         method: 'GET',
       }),
       transformResponse: (response: unknown) =>
-        parseWithSchema(
-          ReportListResponseSchema,
-          response,
-          'Invalid reports response payload.',
-        ),
+        parseWithSchema(ReportListResponseSchema, response, 'Invalid reports response payload.'),
     }),
     getReportMetadata: builder.query<ReportMetadata, string>({
       query: (reportCode) => ({
@@ -93,11 +83,7 @@ export const reportApi = createApi({
         method: 'GET',
       }),
       transformResponse: (response: unknown) =>
-        parseWithSchema(
-          ReportMetadataSchema,
-          response,
-          'Invalid report metadata payload.',
-        ),
+        parseWithSchema(ReportMetadataSchema, response, 'Invalid report metadata payload.'),
     }),
     listTenants: builder.query<TenantOption[], string | void>({
       query: () => ({
@@ -105,11 +91,7 @@ export const reportApi = createApi({
         method: 'GET',
       }),
       transformResponse: (response: unknown) =>
-        parseWithSchema(
-          TenantOptionListSchema,
-          response,
-          'Invalid tenants response payload.',
-        ),
+        parseWithSchema(TenantOptionListSchema, response, 'Invalid tenants response payload.'),
     }),
     listOrganizationsByTenant: builder.query<
       OrganizationOption[],
@@ -128,10 +110,10 @@ export const reportApi = createApi({
     }),
     listSharedSettings: builder.query<
       SharedSettingOption[],
-      { reportCode: string; serviceKey: string; mockUserId?: string }
+      { serviceKey: string; mockUserId?: string }
     >({
-      query: ({ reportCode, serviceKey }) => ({
-        url: `reports/${encodeURIComponent(reportCode)}/external-services/${encodeURIComponent(serviceKey)}/shared-settings`,
+      query: ({ serviceKey }) => ({
+        url: `reports/${encodeURIComponent(SIMPLE_SALES_SUMMARY_REPORT_CODE)}/external-services/${encodeURIComponent(serviceKey)}/shared-settings`,
         method: 'GET',
       }),
       transformResponse: (response: unknown) =>
@@ -153,11 +135,7 @@ export const reportApi = createApi({
         },
       }),
       transformResponse: (response: unknown) =>
-        parseWithSchema(
-          ReportLaunchAcceptedSchema,
-          response,
-          'Invalid launch response payload.',
-        ),
+        parseWithSchema(ReportLaunchAcceptedSchema, response, 'Invalid launch response payload.'),
     }),
     getReportInstance: builder.query<ReportInstance, string>({
       query: (reportInstanceId) => ({
@@ -165,29 +143,22 @@ export const reportApi = createApi({
         method: 'GET',
       }),
       transformResponse: (response: unknown) =>
+        parseWithSchema(ReportInstanceSchema, response, 'Invalid report instance payload.'),
+    }),
+    listReportInstancesByReportCode: builder.query<ReportInstanceListItem[], string>({
+      query: (reportCode) => ({
+        url: `reports/${encodeURIComponent(reportCode)}/instances`,
+        method: 'GET',
+      }),
+      transformResponse: (response: unknown) =>
         parseWithSchema(
-          ReportInstanceSchema,
+          ReportInstanceListResponseSchema,
           response,
-          'Invalid report instance payload.',
+          'Invalid report instances payload.',
         ),
     }),
-    listReportInstancesByReportCode: builder.query<ReportInstanceListItem[], string>(
-      {
-        query: (reportCode) => ({
-          url: `reports/${encodeURIComponent(reportCode)}/instances`,
-          method: 'GET',
-        }),
-        transformResponse: (response: unknown) =>
-          parseWithSchema(
-            ReportInstanceListResponseSchema,
-            response,
-            'Invalid report instances payload.',
-          ),
-      },
-    ),
   }),
 });
-
 
 export const {
   useListReportsQuery,

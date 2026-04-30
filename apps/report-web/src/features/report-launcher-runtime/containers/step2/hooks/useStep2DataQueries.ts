@@ -3,7 +3,6 @@ import {
   useGetReportMetadataQuery,
   useListOrganizationsByTenantQuery,
   useListReportsQuery,
-  useListSharedSettingsQuery,
   useListTenantsQuery,
 } from '../../../api/reportApi';
 import { selectSelectedReport } from '../../../store/launcherSelectors';
@@ -33,22 +32,6 @@ export function useStep2DataQueries() {
     },
   );
 
-  const externalDependency = metadataQuery.data?.externalDependencies[0] ?? null;
-  const sharedSettingsQuery = useListSharedSettingsQuery(
-    {
-      reportCode: selectedReportCode,
-      serviceKey: externalDependency?.serviceKey ?? '',
-      mockUserId: selectedMockUserId,
-    },
-    {
-      skip:
-        !externalDependency ||
-        selectedReportCode.trim().length === 0 ||
-        externalDependency.serviceKey.trim().length === 0,
-      refetchOnMountOrArgChange: true,
-    },
-  );
-
   const selectedReport = useAppSelector(selectSelectedReport);
 
   return {
@@ -56,8 +39,6 @@ export function useStep2DataQueries() {
     metadataQuery,
     tenantsQuery,
     organizationsQuery,
-    sharedSettingsQuery,
-    externalDependency,
     selectedReport,
   };
 }

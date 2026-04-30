@@ -24,10 +24,6 @@ export function Step2LaunchConfigurationContainer() {
     metadata: step2Queries.metadataQuery.data,
     metadataLoading: step2Queries.metadataQuery.isLoading,
     reportsLoading: step2Queries.reportsQuery.isLoading,
-    externalDependencyServiceKey: step2Queries.externalDependency?.serviceKey,
-    sharedSettings: step2Queries.sharedSettingsQuery.data ?? [],
-    sharedSettingsLoading:
-      step2Queries.sharedSettingsQuery.isFetching || step2Queries.sharedSettingsQuery.isLoading,
     isLaunching: step2Actions.launchReportMutationState.isLoading,
   });
 
@@ -68,15 +64,6 @@ export function Step2LaunchConfigurationContainer() {
       {step2Queries.organizationsQuery.error ? (
         <Alert color="red" variant="light">
           {toUiErrorMessage(step2Queries.organizationsQuery.error, 'Failed to load organizations.')}
-        </Alert>
-      ) : null}
-
-      {step2Queries.sharedSettingsQuery.error ? (
-        <Alert color="red" variant="light">
-          {toUiErrorMessage(
-            step2Queries.sharedSettingsQuery.error,
-            'Failed to load shared settings.',
-          )}
         </Alert>
       ) : null}
 

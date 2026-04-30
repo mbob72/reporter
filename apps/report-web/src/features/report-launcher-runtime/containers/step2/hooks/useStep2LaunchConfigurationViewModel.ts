@@ -4,7 +4,6 @@ import { DEFAULT_MOCK_USER_ID, mockUsers } from '@report-platform/auth';
 import type {
   ReportListItem,
   ReportMetadata,
-  SharedSettingOption,
   SimpleSalesSummaryLaunchParams,
   SimpleSalesSummaryXlsxLaunchParams,
 } from '@report-platform/contracts';
@@ -16,16 +15,13 @@ import {
 import { useAppSelector } from '../../../../../app/hooks';
 import { hasRoleAccess } from '../../../lib/access';
 import type { ReportLaunchDraft } from '../../../store/launcherSlice';
-import type { ReportStep2Configuration, SharedSettingViewOption } from '../types';
+import type { ReportStep2Configuration } from '../types';
 
 type UseStep2LaunchConfigurationViewModelParams = {
   selectedReport: ReportListItem | undefined;
   metadata: ReportMetadata | undefined;
   metadataLoading: boolean;
   reportsLoading: boolean;
-  externalDependencyServiceKey: string | undefined;
-  sharedSettings: SharedSettingOption[];
-  sharedSettingsLoading: boolean;
   isLaunching: boolean;
 };
 
@@ -42,7 +38,6 @@ function buildSimpleSalesInitialValues(params: {
   selectedTenantId: string;
   selectedOrganizationId: string;
   launchDraft: ReportLaunchDraft | null;
-  sharedSettingOptions: SharedSettingViewOption[];
 }): SimpleSalesSummaryLaunchParams {
   const previousDraft =
     params.launchDraft?.reportCode === SIMPLE_SALES_SUMMARY_REPORT_CODE
@@ -53,25 +48,6 @@ function buildSimpleSalesInitialValues(params: {
     mode: 'manual' as const,
     apiKey: '',
   };
-
-  if (credentials.mode === 'shared_setting') {
-    const hasSelectedSharedSetting = params.sharedSettingOptions.some(
-      (setting) => setting.id === credentials.sharedSettingId,
-    );
-
-    const sharedSettingId = hasSelectedSharedSetting
-      ? credentials.sharedSettingId
-      : (params.sharedSettingOptions[0]?.id ?? '');
-
-    return {
-      tenantId: params.selectedTenantId,
-      organizationId: params.selectedOrganizationId,
-      credentials: {
-        mode: 'shared_setting',
-        sharedSettingId,
-      },
-    };
-  }
 
   return {
     tenantId: params.selectedTenantId,
@@ -105,9 +81,6 @@ export function useStep2LaunchConfigurationViewModel({
   metadata,
   metadataLoading,
   reportsLoading,
-  externalDependencyServiceKey,
-  sharedSettings,
-  sharedSettingsLoading,
   isLaunching,
 }: UseStep2LaunchConfigurationViewModelParams) {
   const selectedMockUserId = useAppSelector((state) => state.session.selectedMockUserId);
@@ -117,35 +90,7 @@ export function useStep2LaunchConfigurationViewModel({
   const launchDraft = useAppSelector((state) => state.launcher.launchDraft);
 
   const currentUser = mockUsers[selectedMockUserId] ?? mockUsers[DEFAULT_MOCK_USER_ID];
-
-  const sharedSettingOptions: SharedSettingViewOption[] = useMemo(
-    () =>
-      sharedSettings.map((setting) => ({
-        id: setting.id,
-        label: setting.label,
-        description: `Service key: ${setting.serviceKey}`,
-      })),
-    [sharedSettings],
-  );
-
-  const sharedSettingsEmptyReason = useMemo(
-    function buildSharedSettingsEmptyReason() {
-      if (!externalDependencyServiceKey) {
-        return 'This report does not require shared settings.';
-      }
-
-      if (sharedSettingsLoading) {
-        return undefined;
-      }
-
-      if (sharedSettingOptions.length === 0) {
-        return 'No shared settings are available for current user/report context.';
-      }
-
-      return undefined;
-    },
-    [externalDependencyServiceKey, sharedSettingsLoading, sharedSettingOptions.length],
-  );
+  const externalDependencyServiceKey = metadata?.externalDependencies[0]?.serviceKey;
 
   const hasLaunchAccess = metadata
     ? hasRoleAccess(currentUser.role, metadata.minRoleToLaunch)
@@ -256,11 +201,8 @@ export function useStep2LaunchConfigurationViewModel({
             selectedTenantId,
             selectedOrganizationId,
             launchDraft,
-            sharedSettingOptions,
           }),
-          sharedSettings: sharedSettingOptions,
-          sharedSettingsLoading: Boolean(externalDependencyServiceKey) && sharedSettingsLoading,
-          sharedSettingsEmptyReason,
+          externalDependencyServiceKey,
         };
       case SIMPLE_SALES_SUMMARY_XLSX_REPORT_CODE:
         return {
@@ -277,10 +219,7 @@ export function useStep2LaunchConfigurationViewModel({
     selectedTenantId,
     selectedOrganizationId,
     launchDraft,
-    sharedSettingOptions,
     externalDependencyServiceKey,
-    sharedSettingsLoading,
-    sharedSettingsEmptyReason,
   ]);
 
   return {

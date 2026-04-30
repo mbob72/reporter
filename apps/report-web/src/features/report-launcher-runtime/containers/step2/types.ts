@@ -10,18 +10,10 @@ import {
 import type { LaunchConfigurationModel } from '../../../report-launcher-story/types';
 import type { ReportLaunchDraft } from '../../store/launcherSlice';
 
-export type SharedSettingViewOption = {
-  id: string;
-  label: string;
-  description: string;
-};
-
 export type SimpleSalesSummaryStep2Configuration =
   LaunchConfigurationModel<SimpleSalesSummaryLaunchParams> & {
     reportCode: typeof SIMPLE_SALES_SUMMARY_REPORT_CODE;
-    sharedSettings: SharedSettingViewOption[];
-    sharedSettingsLoading: boolean;
-    sharedSettingsEmptyReason?: string;
+    externalDependencyServiceKey?: string;
   };
 
 export type SimpleSalesSummaryXlsxStep2Configuration =

@@ -1,4 +1,4 @@
-import { Paper, Radio, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Alert, Paper, Radio, Select, Stack, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useEffect, useMemo } from 'react';
 
@@ -8,6 +8,8 @@ import {
 } from '@report-platform/contracts';
 
 import { Step2LaunchConfigurationCard } from '../../../../report-launcher-story/components/Step2LaunchConfigurationCard';
+import { useListSharedSettingsQuery } from '../../../api/reportApi';
+import { toUiErrorMessage } from '../../../lib/toUiErrorMessage';
 import type { ReportStep2ComponentProps, SimpleSalesSummaryStep2Configuration } from '../types';
 import { applyZodErrors } from './zodFormErrors';
 
@@ -27,6 +29,42 @@ export function SimpleSalesSummaryStep2({
     [configuration.initialValues],
   );
   const syncedInitialValues = useMemo(() => configuration.initialValues, [initialValuesSignature]);
+  const sharedSettingsQuery = useListSharedSettingsQuery(
+    {
+      serviceKey: configuration.externalDependencyServiceKey ?? '',
+    },
+    {
+      skip: !configuration.externalDependencyServiceKey,
+      refetchOnMountOrArgChange: true,
+    },
+  );
+  const sharedSettings = useMemo(
+    () =>
+      (sharedSettingsQuery.data ?? []).map((setting) => ({
+        id: setting.id,
+        label: setting.label,
+        description: `Service key: ${setting.serviceKey}`,
+      })),
+    [sharedSettingsQuery.data],
+  );
+  const sharedSettingsLoading =
+    Boolean(configuration.externalDependencyServiceKey) &&
+    (sharedSettingsQuery.isLoading || sharedSettingsQuery.isFetching);
+  const sharedSettingsEmptyReason = useMemo(() => {
+    if (!configuration.externalDependencyServiceKey) {
+      return 'This report does not require shared settings.';
+    }
+
+    if (sharedSettingsLoading) {
+      return undefined;
+    }
+
+    if (sharedSettings.length === 0) {
+      return 'No shared settings are available for current user/report context.';
+    }
+
+    return undefined;
+  }, [configuration.externalDependencyServiceKey, sharedSettingsLoading, sharedSettings.length]);
 
   useEffect(
     function syncInitialValuesEffect() {
@@ -36,6 +74,29 @@ export function SimpleSalesSummaryStep2({
     [clearErrors, setValues, syncedInitialValues],
   );
 
+  useEffect(
+    function syncSharedSettingSelectionWithLoadedOptionsEffect() {
+      const credentials = form.values.credentials;
+
+      if (credentials.mode !== 'shared_setting') {
+        return;
+      }
+
+      if (sharedSettings.length === 0) {
+        return;
+      }
+
+      const hasSelectedSharedSetting = sharedSettings.some(
+        (setting) => setting.id === credentials.sharedSettingId,
+      );
+
+      if (!hasSelectedSharedSetting) {
+        form.setFieldValue('credentials.sharedSettingId', sharedSettings[0].id);
+      }
+    },
+    [form, sharedSettings],
+  );
+
   const selectedSharedSettingId =
     form.values.credentials.mode === 'shared_setting'
       ? form.values.credentials.sharedSettingId
@@ -43,16 +104,11 @@ export function SimpleSalesSummaryStep2({
 
   const activeSharedSettingDescription = useMemo(() => {
     return (
-      configuration.sharedSettings.find((setting) => setting.id === selectedSharedSettingId)
-        ?.description ??
-      configuration.sharedSettingsEmptyReason ??
+      sharedSettings.find((setting) => setting.id === selectedSharedSettingId)?.description ??
+      sharedSettingsEmptyReason ??
       'Select a shared setting before launch.'
     );
-  }, [
-    configuration.sharedSettings,
-    configuration.sharedSettingsEmptyReason,
-    selectedSharedSettingId,
-  ]);
+  }, [sharedSettings, sharedSettingsEmptyReason, selectedSharedSettingId]);
 
   const handleSubmit = form.onSubmit((values) => {
     form.clearErrors();
@@ -98,7 +154,7 @@ export function SimpleSalesSummaryStep2({
                 sharedSettingId:
                   form.values.credentials.mode === 'shared_setting'
                     ? form.values.credentials.sharedSettingId
-                    : (configuration.sharedSettings[0]?.id ?? ''),
+                    : (sharedSettings[0]?.id ?? ''),
               });
             }}
           >
@@ -107,7 +163,7 @@ export function SimpleSalesSummaryStep2({
               <Radio
                 value="shared_setting"
                 label="Shared setting"
-                disabled={configuration.sharedSettings.length === 0}
+                disabled={sharedSettings.length === 0}
               />
             </Stack>
           </Radio.Group>
@@ -126,15 +182,13 @@ export function SimpleSalesSummaryStep2({
             <Select
               label="Shared setting"
               value={selectedSharedSettingId}
-              data={configuration.sharedSettings.map((setting) => ({
+              data={sharedSettings.map((setting) => ({
                 value: setting.id,
                 label: setting.label,
               }))}
-              disabled={
-                configuration.sharedSettingsLoading || configuration.sharedSettings.length === 0
-              }
+              disabled={sharedSettingsLoading || sharedSettings.length === 0}
               description={
-                configuration.sharedSettingsLoading
+                sharedSettingsLoading
                   ? 'Loading shared settings...'
                   : activeSharedSettingDescription
               }
@@ -144,6 +198,12 @@ export function SimpleSalesSummaryStep2({
               }}
             />
           )}
+
+          {sharedSettingsQuery.error ? (
+            <Alert color="red" variant="light">
+              {toUiErrorMessage(sharedSettingsQuery.error, 'Failed to load shared settings.')}
+            </Alert>
+          ) : null}
         </Stack>
       </Paper>
     </Step2LaunchConfigurationCard>
