@@ -10,6 +10,9 @@ import type { ReportDefinition, ReportRegistry } from '@report-platform/registry
 import { ReportInstanceRunner } from './report-instance.runner';
 import { FileSystemReportInstanceStore } from './report-instance.store';
 import type { InternalReportInstanceRecord } from './report-instance.types';
+import { GeneratedFilesService } from './modules/reports/services/generated-files.service';
+import { ReportsLaunchService } from './modules/reports/services/reports-launch.service';
+import { ReportsQueryService } from './modules/reports/services/reports-query.service';
 import { ReportsController } from './reports.controller';
 
 type RegistryMock = {
@@ -77,10 +80,16 @@ function createController(args?: {
   const runnerMock = args?.runnerMock ?? createRunnerMock();
 
   const controller = new ReportsController(
-    registryMock as unknown as ReportRegistry,
-    sharedSettingsProviderMock as unknown as SharedSettingsProvider,
-    storeMock as unknown as FileSystemReportInstanceStore,
-    runnerMock as unknown as ReportInstanceRunner,
+    new ReportsQueryService(
+      registryMock as unknown as ReportRegistry,
+      sharedSettingsProviderMock as unknown as SharedSettingsProvider,
+      storeMock as unknown as FileSystemReportInstanceStore,
+    ),
+    new ReportsLaunchService(
+      registryMock as unknown as ReportRegistry,
+      runnerMock as unknown as ReportInstanceRunner,
+    ),
+    new GeneratedFilesService(storeMock as unknown as FileSystemReportInstanceStore),
   );
 
   return {

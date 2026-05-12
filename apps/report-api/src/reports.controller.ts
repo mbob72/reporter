@@ -11,28 +11,12 @@ import {
   Res,
 } from '@nestjs/common';
 
-import { canAccessTenantData, getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
-import type { SharedSettingsProvider } from '@report-platform/external-api';
-import { SHARED_SETTINGS_PROVIDER_TOKEN } from '@report-platform/external-api';
-import { getAllTenants, getOrganizationsByTenant } from '@report-platform/data-access';
-import {
-  LaunchReportBodySchema,
-  ReportInstanceListResponseSchema,
-  ReportMetadataSchema,
-  ReportListResponseSchema,
-  SharedSettingOptionListSchema,
-} from '@report-platform/contracts';
-import type { ApiError } from '@report-platform/contracts';
-import { ReportRegistry } from '@report-platform/registry';
+import { getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
 
-import { hasRoleAccess, toHttpException } from './report-http.helpers';
-import { ReportInstanceRunner } from './report-instance.runner';
-import { FileSystemReportInstanceStore } from './report-instance.store';
-import {
-  REPORT_INSTANCE_RUNNER_TOKEN,
-  REPORT_INSTANCE_STORE_TOKEN,
-  REPORT_REGISTRY_TOKEN,
-} from './reporting.providers';
+import { toHttpException } from './report-http.helpers';
+import { GeneratedFilesService } from './modules/reports/services/generated-files.service';
+import { ReportsLaunchService } from './modules/reports/services/reports-launch.service';
+import { ReportsQueryService } from './modules/reports/services/reports-query.service';
 
 type RequestWithHeaders = {
   headers: Record<string, string | string[] | undefined>;
@@ -43,14 +27,12 @@ export class ReportsController {
   private readonly logger = new Logger(ReportsController.name);
 
   constructor(
-    @Inject(REPORT_REGISTRY_TOKEN)
-    private readonly reportRegistry: ReportRegistry,
-    @Inject(SHARED_SETTINGS_PROVIDER_TOKEN)
-    private readonly sharedSettingsProvider: SharedSettingsProvider,
-    @Inject(REPORT_INSTANCE_STORE_TOKEN)
-    private readonly reportInstanceStore: FileSystemReportInstanceStore,
-    @Inject(REPORT_INSTANCE_RUNNER_TOKEN)
-    private readonly reportInstanceRunner: ReportInstanceRunner,
+    @Inject(ReportsQueryService)
+    private readonly reportsQueryService: ReportsQueryService,
+    @Inject(ReportsLaunchService)
+    private readonly reportsLaunchService: ReportsLaunchService,
+    @Inject(GeneratedFilesService)
+    private readonly generatedFilesService: GeneratedFilesService,
   ) {}
 
   @Get('reports')
@@ -58,18 +40,13 @@ export class ReportsController {
   async listReports(@Req() req: RequestWithHeaders) {
     try {
       const currentUser = getCurrentUser(req.headers);
-      const reportList = this.reportRegistry.listReports();
-      const parsedResponse = ReportListResponseSchema.safeParse(reportList);
-
-      if (!parsedResponse.success) {
-        throw new Error('Invalid report list response.');
-      }
+      const payload = this.reportsQueryService.listReports();
 
       this.logger.log(
-        `list reports count=${parsedResponse.data.length} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
+        `list reports count=${payload.length} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
       );
 
-      return parsedResponse.data;
+      return payload;
     } catch (error) {
       throw toHttpException(error);
     }
@@ -79,23 +56,7 @@ export class ReportsController {
   @HttpCode(200)
   async getReportMetadata(@Param('code') reportCode: string, @Req() req: RequestWithHeaders) {
     try {
-      const currentUser = getCurrentUser(req.headers);
-      const reportMetadata = this.reportRegistry.getReportMetadata(reportCode, currentUser);
-
-      if (!reportMetadata) {
-        throw {
-          code: 'NOT_FOUND',
-          message: `Unknown report: ${reportCode}`,
-        } satisfies ApiError;
-      }
-
-      const parsedMetadata = ReportMetadataSchema.safeParse(reportMetadata);
-
-      if (!parsedMetadata.success) {
-        throw new Error('Invalid report metadata.');
-      }
-
-      return parsedMetadata.data;
+      return this.reportsQueryService.getReportMetadata(reportCode, req);
     } catch (error) {
       throw toHttpException(error);
     }
@@ -109,40 +70,7 @@ export class ReportsController {
     @Req() req: RequestWithHeaders,
   ) {
     try {
-      const currentUser = getCurrentUser(req.headers);
-      const reportDefinition = this.reportRegistry.getReport(reportCode);
-
-      if (!reportDefinition) {
-        throw {
-          code: 'NOT_FOUND',
-          message: `Unknown report: ${reportCode}`,
-        } satisfies ApiError;
-      }
-
-      const reportMetadata = reportDefinition.getMetadata(currentUser);
-      const requiresService = reportMetadata.externalDependencies.some(
-        (dependency) => dependency.serviceKey === serviceKey,
-      );
-
-      if (!requiresService) {
-        throw {
-          code: 'VALIDATION_ERROR',
-          message: `Report does not declare external service: ${serviceKey}`,
-        } satisfies ApiError;
-      }
-
-      const sharedSettingOptions = await this.sharedSettingsProvider.listOptions({
-        currentUser,
-        reportCode,
-        serviceKey,
-      });
-      const parsedResponse = SharedSettingOptionListSchema.safeParse(sharedSettingOptions);
-
-      if (!parsedResponse.success) {
-        throw new Error('Invalid shared settings response.');
-      }
-
-      return parsedResponse.data;
+      return await this.reportsQueryService.listSharedSettings(reportCode, serviceKey, req);
     } catch (error) {
       throw toHttpException(error);
     }
@@ -152,18 +80,7 @@ export class ReportsController {
   @HttpCode(200)
   async listTenants(@Req() req: RequestWithHeaders) {
     try {
-      const currentUser = getCurrentUser(req.headers);
-      const allTenants = getAllTenants();
-
-      if (currentUser.role === 'Admin') {
-        return allTenants;
-      }
-
-      if (currentUser.role === 'TenantAdmin' && currentUser.tenantId) {
-        return allTenants.filter((tenantOption) => tenantOption.id === currentUser.tenantId);
-      }
-
-      return [];
+      return this.reportsQueryService.listTenants(req);
     } catch (error) {
       throw toHttpException(error);
     }
@@ -176,16 +93,7 @@ export class ReportsController {
     @Req() req: RequestWithHeaders,
   ) {
     try {
-      const currentUser = getCurrentUser(req.headers);
-
-      if (!canAccessTenantData(currentUser, tenantId)) {
-        throw {
-          code: 'FORBIDDEN',
-          message: 'You do not have access to this tenant.',
-        } satisfies ApiError;
-      }
-
-      return getOrganizationsByTenant(tenantId);
+      return this.reportsQueryService.listOrganizationsByTenant(tenantId, req);
     } catch (error) {
       throw toHttpException(error);
     }
@@ -199,54 +107,15 @@ export class ReportsController {
     @Req() req: RequestWithHeaders,
   ) {
     try {
-      const parsedBody = LaunchReportBodySchema.safeParse(body);
-
-      if (!parsedBody.success) {
-        throw {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid request payload.',
-        } satisfies ApiError;
-      }
-
-      const reportDefinition = this.reportRegistry.getReport(reportCode);
-
-      if (!reportDefinition) {
-        throw {
-          code: 'NOT_FOUND',
-          message: `Unknown report: ${reportCode}`,
-        } satisfies ApiError;
-      }
-
-      const currentUser = getCurrentUser(req.headers);
-      const reportMetadata = reportDefinition.getMetadata(currentUser);
-
-      if (!hasRoleAccess(currentUser.role, reportMetadata.minRoleToLaunch)) {
-        throw {
-          code: 'FORBIDDEN',
-          message: 'You do not have access to launch this report.',
-        } satisfies ApiError;
-      }
-
-      const parsedLaunchParams = reportDefinition.launchParamsSchema.safeParse(
-        parsedBody.data.params,
-      );
-
-      if (!parsedLaunchParams.success) {
-        throw {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid launch params for selected report.',
-        } satisfies ApiError;
-      }
-
-      this.logger.log(
-        `launch report=${reportCode} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
-      );
-
-      return await this.reportInstanceRunner.start({
+      const { launch, mockUser } = await this.reportsLaunchService.launchReport(
         reportCode,
-        currentUser,
-        params: parsedLaunchParams.data,
-      });
+        body,
+        req,
+      );
+
+      this.logger.log(`launch report=${reportCode} mockUser=${mockUser}`);
+
+      return launch;
     } catch (error) {
       throw toHttpException(error);
     }
@@ -256,36 +125,7 @@ export class ReportsController {
   @HttpCode(200)
   async listReportInstancesByReportCode(@Param('reportCode') reportCode: string) {
     try {
-      const reportDefinition = this.reportRegistry.getReport(reportCode);
-
-      if (!reportDefinition) {
-        throw {
-          code: 'NOT_FOUND',
-          message: `Unknown report: ${reportCode}`,
-        } satisfies ApiError;
-      }
-
-      const instances = await this.reportInstanceStore.listByReportCode(reportCode);
-      const payload = instances.map((instance) => ({
-        id: instance.id,
-        reportCode: instance.reportCode,
-        status: instance.status,
-        createdAt: instance.createdAt,
-        finishedAt: instance.finishedAt,
-        fileName: instance.fileName,
-        byteLength: instance.byteLength,
-        downloadUrl:
-          instance.status === 'completed' && instance.artifactId
-            ? `/generated-files/${instance.artifactId}`
-            : undefined,
-      }));
-      const parsedResponse = ReportInstanceListResponseSchema.safeParse(payload);
-
-      if (!parsedResponse.success) {
-        throw new Error('Invalid report instances payload.');
-      }
-
-      return parsedResponse.data;
+      return await this.reportsQueryService.listReportInstancesByReportCode(reportCode);
     } catch (error) {
       throw toHttpException(error);
     }
@@ -295,19 +135,12 @@ export class ReportsController {
   @HttpCode(200)
   async downloadGeneratedFile(@Param('fileId') fileId: string, @Res() res: any) {
     try {
-      const storedFile = await this.reportInstanceStore.getArtifact(fileId);
+      const generatedFile = await this.generatedFilesService.getGeneratedFile(fileId);
 
-      if (!storedFile) {
-        throw {
-          code: 'NOT_FOUND',
-          message: 'Generated file not found.',
-        } satisfies ApiError;
-      }
-
-      res.setHeader('Content-Type', storedFile.mimeType);
-      res.setHeader('Content-Disposition', `attachment; filename="${storedFile.fileName}"`);
-      res.setHeader('Content-Length', String(storedFile.bytes.byteLength));
-      res.send(Buffer.from(storedFile.bytes));
+      res.setHeader('Content-Type', generatedFile.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${generatedFile.fileName}"`);
+      res.setHeader('Content-Length', String(generatedFile.byteLength));
+      res.send(generatedFile.bytes);
     } catch (error) {
       throw toHttpException(error);
     }

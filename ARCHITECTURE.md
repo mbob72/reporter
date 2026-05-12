@@ -6,6 +6,7 @@
 - Изменения в коде, влияющие на архитектуру и контракты, должны сопровождаться обновлением этого файла.
 - Текущая версия отражает состояние репозитория на `2026-04-29`.
 - Архитектурное описание централизовано здесь, чтобы избежать дублирования и расхождения документов.
+- Целевая модульная структура `apps/report-api` (Nest modules + responsibility matrix) описана в [docs/report-api-modules.md](./docs/report-api-modules.md).
 
 ## Legacy-термины (миграция API)
 
@@ -222,12 +223,12 @@ Launch params описываются в:
 Файлы:
 
 - `apps/report-api/src/report-registry.factory.ts`
-- при новых зависимостях: `apps/report-api/src/reporting.providers.ts`
+- при новых зависимостях: `apps/report-api/src/modules/report-registry.module.ts`
 
 Действия:
 
 1. Добавить создание definition в `new ReportRegistry([...])`.
-2. Добавить provider tokens/factories для новых infrastructure зависимостей.
+2. Добавить provider tokens/factories для новых infrastructure зависимостей в модульный DI (`DataAccessModule` / `ExternalServicesModule` / `ReportRegistryModule`).
 
 ### 2.6 Интегрировать frontend
 
@@ -311,7 +312,7 @@ Launch params описываются в:
 Что ожидается в реальности:
 
 - production-адаптеры доступа к БД (например Postgres/ClickHouse) в отдельном инфраструктурном модуле Nx;
-- DI в `reporting.providers.ts` переключается с mock на real adapters;
+- DI в `apps/report-api/src/modules/*` переключается с mock на real adapters;
 - контракты репозиториев сохраняются, поэтому migration path эволюционный.
 
 ### Решение 4: Асинхронный запуск через fork worker (сейчас)
@@ -445,7 +446,8 @@ P2:
 - API controllers: `apps/report-api/src/reports.controller.ts`, `apps/report-api/src/report-runs.controller.ts`
 - Async orchestration: `apps/report-api/src/report-instance.runner.ts`, `apps/report-api/src/report-instance.worker.ts`
 - Persistence: `apps/report-api/src/report-instance.store.ts`
-- Registry wiring: `apps/report-api/src/report-registry.factory.ts`, `apps/report-api/src/reporting.providers.ts`
+- Registry wiring: `apps/report-api/src/report-registry.factory.ts`, `apps/report-api/src/modules/report-registry.module.ts`
+- Module composition: `apps/report-api/src/modules/*`
 - Report examples:
   - `libs/report-definitions/simple-sales-summary/*`
   - `libs/report-definitions/simple-sales-summary-xlsx/*`

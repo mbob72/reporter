@@ -91,7 +91,7 @@ libs/report-platform/contracts/src/reports/<report-code>.contract.ts
 Обновите:
 
 - `apps/report-api/src/report-registry.factory.ts` — добавить `create<ReportName>Definition(...)` в `createReportRegistry(...)`;
-- `apps/report-api/src/reporting.providers.ts` — добавить/подключить новые зависимости при необходимости.
+- `apps/report-api/src/modules/report-registry.module.ts` — добавить/подключить новые зависимости при необходимости.
 - алиасы для нового definition-пакета:
   - `tsconfig.base.json` (`compilerOptions.paths`);
   - `apps/report-api/vite.aliases.ts`;

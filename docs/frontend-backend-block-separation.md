@@ -17,9 +17,9 @@
 
 ## Report API
 
-- В launch endpoint добавлена явная валидация `params` через схему выбранного report definition:
-  [`reports.controller.ts#L230`](../apps/report-api/src/reports.controller.ts#L230),
-  [`reports.controller.ts#L248`](../apps/report-api/src/reports.controller.ts#L248).
+- В launch flow добавлена явная валидация `params` через схему выбранного report definition в сервисном слое:
+  [`reports.controller.ts#L96`](../apps/report-api/src/reports.controller.ts#L96),
+  [`reports-launch.service.ts#L24`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L24).
 - В раннере входные `params` стали `unknown`, а внутренняя нормализация параметров для worker выделена в отдельный шаг:
   [`report-instance.runner.ts#L177`](../apps/report-api/src/report-instance.runner.ts#L177).
 

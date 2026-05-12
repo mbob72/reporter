@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ReportRunsQueryService } from './modules/report-runs/services/report-runs-query.service';
 import { ReportRunsController } from './report-runs.controller';
 import { FileSystemReportInstanceStore } from './report-instance.store';
 
@@ -14,7 +15,7 @@ describe('ReportRunsController', () => {
   it('GET /report-runs/:reportInstanceId returns report instance on success', async () => {
     const storeMock = createStoreMock();
     const controller = new ReportRunsController(
-      storeMock as unknown as FileSystemReportInstanceStore,
+      new ReportRunsQueryService(storeMock as unknown as FileSystemReportInstanceStore),
     );
 
     storeMock.get.mockResolvedValue({
@@ -42,7 +43,7 @@ describe('ReportRunsController', () => {
   it('GET /report-runs/:reportInstanceId returns 404 for unknown instance', async () => {
     const storeMock = createStoreMock();
     const controller = new ReportRunsController(
-      storeMock as unknown as FileSystemReportInstanceStore,
+      new ReportRunsQueryService(storeMock as unknown as FileSystemReportInstanceStore),
     );
 
     storeMock.get.mockResolvedValue(undefined);
@@ -66,7 +67,7 @@ describe('ReportRunsController', () => {
   it('GET /report-runs/:reportInstanceId returns 500 for invalid payload from store', async () => {
     const storeMock = createStoreMock();
     const controller = new ReportRunsController(
-      storeMock as unknown as FileSystemReportInstanceStore,
+      new ReportRunsQueryService(storeMock as unknown as FileSystemReportInstanceStore),
     );
 
     storeMock.get.mockResolvedValue({

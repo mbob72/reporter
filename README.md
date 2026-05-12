@@ -7,6 +7,7 @@
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - основной архитектурный документ (source of truth).
 - [docs/how-to-add-report.md](./docs/how-to-add-report.md) - пошаговая инструкция добавления нового отчета.
 - [docs/report-runtime-call-chain.md](./docs/report-runtime-call-chain.md) - сценарии вызовов между архитектурными блоками.
+- [docs/report-api-modules.md](./docs/report-api-modules.md) - модульная структура Nest API и матрица ответственности endpoint-ов.
 - [docs/frontend-backend-block-separation.md](./docs/frontend-backend-block-separation.md) - изменения по блокам Frontend/Backend.
 - [docs/release-notes.md](./docs/release-notes.md) - журнал релизных изменений.
 - [docs/deployment.md](./docs/deployment.md) - deploy-контур и ограничения текущего CI/CD.
@@ -192,6 +193,7 @@ pnpm nx run-many -t lint,typecheck,test,build --projects=report-api --parallel=1
 ```text
 apps/
   report-api/
+    src/modules/
   report-web/
 
 libs/
@@ -211,6 +213,7 @@ docs/
   external-dependency-resilience.md
   frontend-backend-block-separation.md
   how-to-add-report.md
+  report-api-modules.md
   release-notes.md
   report-runtime-call-chain.md
 ```
