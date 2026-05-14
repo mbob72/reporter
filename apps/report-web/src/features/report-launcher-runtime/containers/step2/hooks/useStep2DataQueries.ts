@@ -9,15 +9,19 @@ import { selectSelectedReport } from '../../../store/launcherSelectors';
 
 export function useStep2DataQueries() {
   const selectedMockUserId = useAppSelector((state) => state.session.selectedMockUserId);
+  const accessToken = useAppSelector((state) => state.session.accessToken);
   const selectedReportCode = useAppSelector((state) => state.launcher.selectedReportCode);
   const selectedTenantId = useAppSelector((state) => state.launcher.selectedTenantId);
 
-  const reportsQuery = useListReportsQuery();
+  const reportsQuery = useListReportsQuery(undefined, {
+    skip: !accessToken,
+  });
   const metadataQuery = useGetReportMetadataQuery(selectedReportCode, {
-    skip: selectedReportCode.trim().length === 0,
+    skip: !accessToken || selectedReportCode.trim().length === 0,
   });
 
   const tenantsQuery = useListTenantsQuery(selectedMockUserId, {
+    skip: !accessToken,
     refetchOnMountOrArgChange: true,
   });
 
@@ -27,7 +31,7 @@ export function useStep2DataQueries() {
       mockUserId: selectedMockUserId,
     },
     {
-      skip: selectedTenantId.trim().length === 0,
+      skip: !accessToken || selectedTenantId.trim().length === 0,
       refetchOnMountOrArgChange: true,
     },
   );

@@ -1,11 +1,12 @@
 import { Alert, Stack } from '@mantine/core';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { useAppDispatch } from '../../../app/hooks';
+import { useAppDispatch, useAppSelector } from '../../../app/hooks';
 import { Step4ResultCard } from '../../report-launcher-story/components/Step4ResultCard';
 import type { Step4ResultModel } from '../../report-launcher-story/types';
 import {
+  useDownloadGeneratedFileMutation,
   useGetReportInstanceQuery,
   useListReportInstancesByReportCodeQuery,
   useListReportsQuery,
@@ -16,6 +17,7 @@ import {
   mapReportInstanceListItemToResultArtifact,
   mapReportInstanceToPrimaryArtifact,
 } from '../lib/reportInstanceMappers';
+import { triggerBrowserDownload } from '../lib/downloadGeneratedFile';
 import { toUiErrorMessage } from '../lib/toUiErrorMessage';
 import { selectReport } from '../store/launcherSlice';
 
@@ -23,21 +25,29 @@ export function Step4ResultContainer() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { reportInstanceId = '' } = useParams();
+  const accessToken = useAppSelector((state) => state.session.accessToken);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadGeneratedFile] = useDownloadGeneratedFileMutation();
 
   const reportInstanceQuery = useGetReportInstanceQuery(reportInstanceId, {
-    skip: reportInstanceId.trim().length === 0,
+    skip: !accessToken || reportInstanceId.trim().length === 0,
     refetchOnMountOrArgChange: true,
   });
 
   const reportInstancesQuery = useListReportInstancesByReportCodeQuery(
     reportInstanceQuery.data?.reportCode ?? '',
     {
-      skip: !reportInstanceQuery.data || reportInstanceQuery.data.reportCode.trim().length === 0,
+      skip:
+        !accessToken ||
+        !reportInstanceQuery.data ||
+        reportInstanceQuery.data.reportCode.trim().length === 0,
       refetchOnMountOrArgChange: true,
     },
   );
 
-  const reportsQuery = useListReportsQuery();
+  const reportsQuery = useListReportsQuery(undefined, {
+    skip: !accessToken,
+  });
 
   // Guard direct-open/reload of /result: if the instance is not completed yet,
   // route back to progress for the same reportInstanceId.
@@ -98,10 +108,27 @@ export function Step4ResultContainer() {
     };
   }, [reportInstanceQuery.data, reportInstancesQuery.data, reportTitle]);
 
+  const handleArtifactDownload = useCallback(
+    async (input: { id: string; label: string; actionHref: string }) => {
+      try {
+        setDownloadError(null);
+        const payload = await downloadGeneratedFile({
+          downloadUrl: input.actionHref,
+          fallbackFileName: input.label,
+        }).unwrap();
+        triggerBrowserDownload(payload.fileBlob, payload.fileName);
+      } catch (error) {
+        setDownloadError(toUiErrorMessage(error, 'Failed to download generated file.'));
+      }
+    },
+    [downloadGeneratedFile],
+  );
+
   return (
     <Stack gap="md" pt="md" className="h-full min-h-0">
       <Step4ResultCard
         result={resultModel}
+        onArtifactActionClick={handleArtifactDownload}
         onBackToReports={() => {
           navigate('/report-launch');
         }}
@@ -125,6 +152,12 @@ export function Step4ResultContainer() {
       {reportInstancesQuery.error ? (
         <Alert color="red" variant="light">
           {toUiErrorMessage(reportInstancesQuery.error, 'Failed to load report run history.')}
+        </Alert>
+      ) : null}
+
+      {downloadError ? (
+        <Alert color="red" variant="light">
+          {downloadError}
         </Alert>
       ) : null}
     </Stack>

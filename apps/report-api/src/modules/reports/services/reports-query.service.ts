@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { canAccessTenantData, getCurrentUser } from '@report-platform/auth';
+import { canAccessTenantData } from '@report-platform/auth';
 import { getAllTenants, getOrganizationsByTenant } from '@report-platform/data-access';
 import {
+  type CurrentUser,
   ReportInstanceListResponseSchema,
   ReportMetadataSchema,
   ReportListResponseSchema,
@@ -17,10 +18,6 @@ import { ReportRegistry } from '@report-platform/registry';
 
 import { FileSystemReportInstanceStore } from '../../../report-instance.store';
 import { REPORT_INSTANCE_STORE_TOKEN, REPORT_REGISTRY_TOKEN } from '../../../reporting.tokens';
-
-type RequestWithHeaders = {
-  headers: Record<string, string | string[] | undefined>;
-};
 
 @Injectable()
 export class ReportsQueryService {
@@ -44,8 +41,7 @@ export class ReportsQueryService {
     return parsedResponse.data;
   }
 
-  getReportMetadata(reportCode: string, request: RequestWithHeaders) {
-    const currentUser = getCurrentUser(request.headers);
+  getReportMetadata(reportCode: string, currentUser: CurrentUser) {
     const reportMetadata = this.reportRegistry.getReportMetadata(reportCode, currentUser);
 
     if (!reportMetadata) {
@@ -64,8 +60,7 @@ export class ReportsQueryService {
     return parsedMetadata.data;
   }
 
-  async listSharedSettings(reportCode: string, serviceKey: string, request: RequestWithHeaders) {
-    const currentUser = getCurrentUser(request.headers);
+  async listSharedSettings(reportCode: string, serviceKey: string, currentUser: CurrentUser) {
     const reportDefinition = this.reportRegistry.getReport(reportCode);
 
     if (!reportDefinition) {
@@ -101,8 +96,7 @@ export class ReportsQueryService {
     return parsedResponse.data;
   }
 
-  listTenants(request: RequestWithHeaders) {
-    const currentUser = getCurrentUser(request.headers);
+  listTenants(currentUser: CurrentUser) {
     const allTenants = getAllTenants();
 
     if (currentUser.role === 'Admin') {
@@ -116,9 +110,7 @@ export class ReportsQueryService {
     return [];
   }
 
-  listOrganizationsByTenant(tenantId: string, request: RequestWithHeaders) {
-    const currentUser = getCurrentUser(request.headers);
-
+  listOrganizationsByTenant(tenantId: string, currentUser: CurrentUser) {
     if (!canAccessTenantData(currentUser, tenantId)) {
       throw {
         code: 'FORBIDDEN',

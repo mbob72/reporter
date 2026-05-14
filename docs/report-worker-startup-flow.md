@@ -5,17 +5,18 @@
 ## 1. Вход через launch endpoint
 
 HTTP запуск отчета приходит в `POST /reports/:reportCode/launch`:
-[`reports.controller.ts#L88`](../apps/report-api/src/reports.controller.ts#L88).
+[`reports.controller.ts#L74`](../apps/report-api/src/reports.controller.ts#L74).
 
-Controller делегирует в `ReportsLaunchService`:
-[`reports.controller.ts#L96`](../apps/report-api/src/reports.controller.ts#L96),
-[`reports-launch.service.ts#L24`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L24).
+Controller (после route-level валидации через `ZodValidationPipe`) делегирует в `ReportsLaunchService`:
+[`reports.controller.ts#L77`](../apps/report-api/src/reports.controller.ts#L77),
+[`reports.controller.ts#L83`](../apps/report-api/src/reports.controller.ts#L83),
+[`reports-launch.service.ts#L19`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L19).
 
-В `ReportsLaunchService` выполняются schema/access проверки и старт раннера:
-[`reports-launch.service.ts#L25`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L25),
-[`reports-launch.service.ts#L46`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L46),
-[`reports-launch.service.ts#L53`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L53),
-[`reports-launch.service.ts#L65`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L65).
+В `ReportsLaunchService` выполняются domain checks (report exists, role access, launch params schema) и старт раннера:
+[`reports-launch.service.ts#L20`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L20),
+[`reports-launch.service.ts#L31`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L31),
+[`reports-launch.service.ts#L38`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38),
+[`reports-launch.service.ts#L47`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L47).
 
 ## 2. Старт раннера и fork процесса
 

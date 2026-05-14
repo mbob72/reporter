@@ -1,7 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { z } from 'zod';
 
-import { MOCK_USER_HEADER } from '@report-platform/auth';
 import {
   ReportCodeSchema,
   ReportInstanceListResponseSchema,
@@ -19,6 +18,7 @@ import {
   type ReportMetadata,
   type SharedSettingOption,
 } from '@report-platform/contracts';
+import { resolveGeneratedFileName } from '../lib/downloadGeneratedFile';
 
 const TenantOptionSchema = z.object({
   id: z.string().trim().min(1),
@@ -33,9 +33,17 @@ const OrganizationOptionSchema = z.object({
 
 const TenantOptionListSchema = z.array(TenantOptionSchema);
 const OrganizationOptionListSchema = z.array(OrganizationOptionSchema);
+const IssueDevTokenResponseSchema = z.object({
+  accessToken: z.string().trim().min(1),
+});
 
 export type TenantOption = z.infer<typeof TenantOptionSchema>;
 export type OrganizationOption = z.infer<typeof OrganizationOptionSchema>;
+export type IssueDevTokenResponse = z.infer<typeof IssueDevTokenResponseSchema>;
+export type DownloadGeneratedFileResponse = {
+  fileBlob: Blob;
+  fileName: string;
+};
 
 function parseWithSchema<T>(schema: z.ZodType<T>, payload: unknown, message: string): T {
   const parsed = schema.safeParse(payload);
@@ -57,12 +65,12 @@ export const reportApi = createApi({
     baseUrl: '/',
     prepareHeaders: (headers, { getState }) => {
       const state = getState() as {
-        session?: { selectedMockUserId?: string };
+        session?: { accessToken?: string | null };
       };
-      const mockUserId = state.session?.selectedMockUserId;
+      const accessToken = state.session?.accessToken;
 
-      if (mockUserId) {
-        headers.set(MOCK_USER_HEADER, mockUserId);
+      if (accessToken) {
+        headers.set('Authorization', `Bearer ${accessToken}`);
       }
 
       return headers;
@@ -76,6 +84,17 @@ export const reportApi = createApi({
       }),
       transformResponse: (response: unknown) =>
         parseWithSchema(ReportListResponseSchema, response, 'Invalid reports response payload.'),
+    }),
+    issueDevToken: builder.mutation<IssueDevTokenResponse, { mockUserId: string }>({
+      query: ({ mockUserId }) => ({
+        url: 'auth/dev-token',
+        method: 'POST',
+        body: {
+          mockUserId,
+        },
+      }),
+      transformResponse: (response: unknown) =>
+        parseWithSchema(IssueDevTokenResponseSchema, response, 'Invalid dev token payload.'),
     }),
     getReportMetadata: builder.query<ReportMetadata, string>({
       query: (reportCode) => ({
@@ -157,10 +176,45 @@ export const reportApi = createApi({
           'Invalid report instances payload.',
         ),
     }),
+    downloadGeneratedFile: builder.mutation<
+      DownloadGeneratedFileResponse,
+      { downloadUrl: string; fallbackFileName: string }
+    >({
+      queryFn: async ({ downloadUrl, fallbackFileName }, _api, _extraOptions, baseQuery) => {
+        const result = await baseQuery({
+          url: downloadUrl,
+          method: 'GET',
+          responseHandler: (response) => response.blob(),
+        });
+
+        if (result.error) {
+          return { error: result.error };
+        }
+
+        const fileBlob = result.data as Blob;
+        const responseHeaders = (
+          result as {
+            meta?: { response?: Response };
+          }
+        ).meta?.response?.headers;
+        const fileName = resolveGeneratedFileName(
+          responseHeaders?.get('Content-Disposition') ?? null,
+          fallbackFileName,
+        );
+
+        return {
+          data: {
+            fileBlob,
+            fileName,
+          },
+        };
+      },
+    }),
   }),
 });
 
 export const {
+  useIssueDevTokenMutation,
   useListReportsQuery,
   useGetReportMetadataQuery,
   useListTenantsQuery,
@@ -169,4 +223,5 @@ export const {
   useLaunchReportMutation,
   useGetReportInstanceQuery,
   useListReportInstancesByReportCodeQuery,
+  useDownloadGeneratedFileMutation,
 } = reportApi;

@@ -25,8 +25,8 @@
 
 Ссылки в коде:
 
-- Shell/stepper и route-driven flow: [`apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L21`](../apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L21)
-- Responsive отступы и контейнер: [`apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L26`](../apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L26)
+- Shell/stepper и route-driven flow: [`apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L25`](../apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L25)
+- Responsive отступы и контейнер: [`apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L68`](../apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L68)
 - Responsive сетка Step1 (`grid-cols-1 -> md:grid-cols-2`): [`apps/report-web/src/features/report-launcher-story/components/Step1ReportSelectionCard.tsx#L120`](../apps/report-web/src/features/report-launcher-story/components/Step1ReportSelectionCard.tsx#L120)
 - Responsive footer actions (`w-full sm:w-auto`): [`apps/report-web/src/features/report-launcher-story/components/Step1ReportSelectionCard.tsx#L277`](../apps/report-web/src/features/report-launcher-story/components/Step1ReportSelectionCard.tsx#L277), [`apps/report-web/src/features/report-launcher-story/components/Step4ResultCard.tsx#L83`](../apps/report-web/src/features/report-launcher-story/components/Step4ResultCard.tsx#L83)
 
@@ -61,7 +61,7 @@
 
 Минимальные кодовые якоря для слайда:
 
-- Launch endpoint: [`apps/report-api/src/reports.controller.ts#L88`](../apps/report-api/src/reports.controller.ts#L88)
+- Launch endpoint: [`apps/report-api/src/reports.controller.ts#L74`](../apps/report-api/src/reports.controller.ts#L74)
 - Runner -> worker fork: [`apps/report-api/src/report-instance.runner.ts#L203`](../apps/report-api/src/report-instance.runner.ts#L203)
 - Worker entrypoint: [`apps/report-api/src/report-instance.worker.ts#L86`](../apps/report-api/src/report-instance.worker.ts#L86)
 - Вызов definition launch: [`apps/report-api/src/report-launch.executor.ts#L43`](../apps/report-api/src/report-launch.executor.ts#L43)
@@ -73,16 +73,18 @@
 Что проговорить:
 
 - Фронт ходит в API через единый RTK Query слой.
+- Перед business запросами фронт bootstrap-ит JWT через `POST /auth/dev-token` (demo-only), дальше использует `Authorization: Bearer`.
 - Сервер валидирует payload и `launchParamsSchema` конкретного report definition.
 - После launch backend сразу отдает `queued + reportInstanceId`, далее фронт поллит статус и получает артефакт.
 
 Ссылки в коде:
 
 - API слой фронта (`listReports`, `metadata`, `launch`, `report-runs`, `instances`): [`apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts#L60`](../apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts#L60)
+- Front auth bootstrap (`issueDevToken`): [`apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts#L83`](../apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts#L83), [`apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L34`](../apps/report-web/src/features/report-launcher-runtime/containers/ReportLaunchShell.tsx#L34)
 - Front launch mutation: [`apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts#L144`](../apps/report-web/src/features/report-launcher-runtime/api/reportApi.ts#L144)
-- Backend launch + server-side schema validation: [`apps/report-api/src/reports.controller.ts#L88`](../apps/report-api/src/reports.controller.ts#L88), [`apps/report-api/src/modules/reports/services/reports-launch.service.ts#L24`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L24)
-- Status endpoint: [`apps/report-api/src/report-runs.controller.ts#L10`](../apps/report-api/src/report-runs.controller.ts#L10), [`apps/report-api/src/modules/report-runs/services/report-runs-query.service.ts#L15`](../apps/report-api/src/modules/report-runs/services/report-runs-query.service.ts#L15)
-- Download endpoint: [`apps/report-api/src/reports.controller.ts#L120`](../apps/report-api/src/reports.controller.ts#L120), [`apps/report-api/src/modules/reports/services/generated-files.service.ts#L15`](../apps/report-api/src/modules/reports/services/generated-files.service.ts#L15)
+- Backend launch + server-side schema validation: [`apps/report-api/src/reports.controller.ts#L74`](../apps/report-api/src/reports.controller.ts#L74), [`apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38)
+- Status endpoint: [`apps/report-api/src/report-runs.controller.ts#L14`](../apps/report-api/src/report-runs.controller.ts#L14), [`apps/report-api/src/modules/report-runs/services/report-runs-query.service.ts#L15`](../apps/report-api/src/modules/report-runs/services/report-runs-query.service.ts#L15)
+- Download endpoint: [`apps/report-api/src/reports.controller.ts#L95`](../apps/report-api/src/reports.controller.ts#L95), [`apps/report-api/src/modules/reports/services/generated-files.service.ts#L15`](../apps/report-api/src/modules/reports/services/generated-files.service.ts#L15)
 
 ## 5) Инфраструктура Проекта (2:30)
 
@@ -135,10 +137,10 @@
 - `7f097ae refactor(reports): typed launch params and explicit Step2 forms`.
 - Разбор этого изменения: [`docs/frontend-backend-block-separation.md`](./frontend-backend-block-separation.md)
 - Где видно инъекцию report-specific формы по `reportCode`:
-  - [`apps/report-web/src/features/report-launcher-runtime/containers/Step2LaunchConfigurationContainer.tsx#L35`](../apps/report-web/src/features/report-launcher-runtime/containers/Step2LaunchConfigurationContainer.tsx#L35)
+  - [`apps/report-web/src/features/report-launcher-runtime/containers/Step2LaunchConfigurationContainer.tsx#L30`](../apps/report-web/src/features/report-launcher-runtime/containers/Step2LaunchConfigurationContainer.tsx#L30)
   - [`apps/report-web/src/features/report-launcher-runtime/containers/step2/reportStep2Registry.ts#L9`](../apps/report-web/src/features/report-launcher-runtime/containers/step2/reportStep2Registry.ts#L9)
-  - [`apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchConfigurationViewModel.ts#L249`](../apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchConfigurationViewModel.ts#L249)
-- Где видно server-side выравнивание контракта: [`apps/report-api/src/modules/reports/services/reports-launch.service.ts#L24`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L24)
+  - [`apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchConfigurationViewModel.ts#L194`](../apps/report-web/src/features/report-launcher-runtime/containers/step2/hooks/useStep2LaunchConfigurationViewModel.ts#L194)
+- Где видно server-side выравнивание контракта: [`apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38)
 
 ## 8) Обзор Документации И Актуальности (2:00)
 

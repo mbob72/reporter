@@ -31,6 +31,7 @@ type Step1ReportSelectionCardProps = {
   initialSearchValue?: string;
   onUserChange?: (userId: string) => void;
   onSelectReport?: (reportCode: string) => void;
+  onReadyInstanceActionClick?: (input: { id: string; label: string; actionHref: string }) => void;
   onContinueToLaunchConfig?: () => void;
 };
 
@@ -65,6 +66,7 @@ export function Step1ReportSelectionCard({
   initialSearchValue = '',
   onUserChange,
   onSelectReport,
+  onReadyInstanceActionClick,
   onContinueToLaunchConfig,
 }: Step1ReportSelectionCardProps) {
   const [searchValue, setSearchValue] = useResettableState(initialSearchValue);
@@ -256,6 +258,17 @@ export function Step1ReportSelectionCard({
                         }))}
                         emptyMessage="No completed report instances for the selected report yet."
                         actionLabel="Download"
+                        onActionClick={(item) => {
+                          if (!item.actionHref || !onReadyInstanceActionClick) {
+                            return;
+                          }
+
+                          onReadyInstanceActionClick({
+                            id: item.id,
+                            label: item.label,
+                            actionHref: item.actionHref,
+                          });
+                        }}
                         selectable
                         selectedSummaryTitle="Selected instance"
                         selectedSummaryEmptyMessage="Click an instance to preview details above the list."

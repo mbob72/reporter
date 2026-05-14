@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, Inject, Param } from '@nestjs/common';
 
-import { toHttpException } from './report-http.helpers';
+import { ReportInstanceIdParamSchema } from './common/pipes/request-schemas';
+import { ZodValidationPipe } from './common/pipes/zod-validation.pipe';
 import { ReportRunsQueryService } from './modules/report-runs/services/report-runs-query.service';
 
 @Controller()
@@ -12,11 +13,13 @@ export class ReportRunsController {
 
   @Get('report-runs/:reportInstanceId')
   @HttpCode(200)
-  async getReportInstance(@Param('reportInstanceId') reportInstanceId: string) {
-    try {
-      return await this.reportRunsQueryService.getReportInstance(reportInstanceId);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+  getReportInstance(
+    @Param(
+      'reportInstanceId',
+      new ZodValidationPipe(ReportInstanceIdParamSchema, 'Invalid report instance id.'),
+    )
+    reportInstanceId: string,
+  ) {
+    return this.reportRunsQueryService.getReportInstance(reportInstanceId);
   }
 }

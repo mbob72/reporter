@@ -1,7 +1,6 @@
-import { HttpStatus } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 
-import { hasRoleAccess, isBuiltFile, toHttpException } from './report-http.helpers';
+import { hasRoleAccess, isBuiltFile } from './report-http.helpers';
 
 describe('hasRoleAccess', () => {
   it('supports hierarchy Auditor < Member < TenantAdmin < Admin', () => {
@@ -39,47 +38,5 @@ describe('isBuiltFile', () => {
         bytes: [1, 2, 3],
       }),
     ).toBe(false);
-  });
-});
-
-describe('toHttpException', () => {
-  it('maps VALIDATION_ERROR to 400', () => {
-    const exception = toHttpException({
-      code: 'VALIDATION_ERROR',
-      message: 'Invalid payload.',
-    });
-
-    expect(exception.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-    expect(exception.getResponse()).toEqual({
-      code: 'VALIDATION_ERROR',
-      message: 'Invalid payload.',
-    });
-  });
-
-  it('maps FORBIDDEN to 403', () => {
-    const exception = toHttpException({
-      code: 'FORBIDDEN',
-      message: 'Forbidden.',
-    });
-
-    expect(exception.getStatus()).toBe(HttpStatus.FORBIDDEN);
-  });
-
-  it('maps NOT_FOUND to 404', () => {
-    const exception = toHttpException({
-      code: 'NOT_FOUND',
-      message: 'Not found.',
-    });
-
-    expect(exception.getStatus()).toBe(HttpStatus.NOT_FOUND);
-  });
-
-  it('maps unknown errors to 500 with generic message', () => {
-    const exception = toHttpException(new Error('Boom'));
-
-    expect(exception.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-    expect(exception.getResponse()).toEqual({
-      message: 'Unexpected server error.',
-    });
   });
 });

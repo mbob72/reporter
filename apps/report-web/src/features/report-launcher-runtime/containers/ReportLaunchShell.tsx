@@ -1,6 +1,10 @@
 import { Card, Container, Stack, Stepper, Text, Title } from '@mantine/core';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+
+import { useAppDispatch, useAppSelector } from '../../../app/hooks';
+import { useIssueDevTokenMutation } from '../api/reportApi';
+import { clearAccessToken, setAccessToken } from '../store/sessionSlice';
 
 function getActiveStep(pathname: string): number {
   if (pathname.startsWith('/report-runs/') && pathname.endsWith('/result')) {
@@ -19,8 +23,46 @@ function getActiveStep(pathname: string): number {
 }
 
 export function ReportLaunchShell() {
+  const dispatch = useAppDispatch();
   const location = useLocation();
+  const selectedMockUserId = useAppSelector((state) => state.session.selectedMockUserId);
+  const accessToken = useAppSelector((state) => state.session.accessToken);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [issueDevToken, issueDevTokenState] = useIssueDevTokenMutation();
   const activeStep = useMemo(() => getActiveStep(location.pathname), [location.pathname]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (accessToken) {
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setAuthError(null);
+    void issueDevToken({ mockUserId: selectedMockUserId })
+      .unwrap()
+      .then((payload) => {
+        if (isCancelled) {
+          return;
+        }
+
+        dispatch(setAccessToken(payload.accessToken));
+      })
+      .catch(() => {
+        if (isCancelled) {
+          return;
+        }
+
+        dispatch(clearAccessToken());
+        setAuthError('Failed to initialize demo auth token.');
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [accessToken, dispatch, issueDevToken, selectedMockUserId]);
 
   return (
     <div className="h-screen w-full overflow-hidden bg-slate-100/90 p-2 sm:p-4 lg:p-8">
@@ -37,12 +79,7 @@ export function ReportLaunchShell() {
               </Text>
             </div>
 
-            <Stepper
-              active={activeStep}
-              allowNextStepsSelect={false}
-              size="sm"
-              className="w-full"
-            >
+            <Stepper active={activeStep} allowNextStepsSelect={false} size="sm" className="w-full">
               <Stepper.Step label="Select" description="Report selection" />
               <Stepper.Step label="Configure" description="Launch params" />
               <Stepper.Step label="Progress" description="Instance status" />
@@ -50,7 +87,13 @@ export function ReportLaunchShell() {
             </Stepper>
 
             <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
-              <Outlet />
+              {authError ? (
+                <Text c="red.7" size="sm">
+                  {authError}
+                </Text>
+              ) : accessToken || issueDevTokenState.isLoading ? (
+                <Outlet />
+              ) : null}
             </div>
           </Stack>
         </Card>

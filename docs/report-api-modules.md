@@ -2,55 +2,61 @@
 
 ## Purpose
 
-Этот документ фиксирует текущую модульную структуру `apps/report-api` после рефакторинга.
+Этот документ фиксирует текущую модульную структуру `apps/report-api` после рефакторинга auth/validation/error handling.
 
 Границы этого дизайна:
 
-- публичные HTTP-контракты не меняются;
-- пути endpoint остаются прежними;
-- `FileSystemReportInstanceStore` пока остается текущей реализацией стора.
+- публичные HTTP-контракты business endpoint-ов сохраняются;
+- `FileSystemReportInstanceStore` пока остается текущей реализацией стора;
+- demo auth bootstrap (`POST /auth/dev-token`) остается dev-only endpoint-ом.
 
 ## Module Graph
 
 ```text
-                           +------------------+
-                           |    AppModule     |
-                           | (imports only)   |
-                           +---------+--------+
-                                     |
-      +------------------------------+------------------------------+
-      |                              |                              |
-+-----v------+               +-------v-------+              +-------v--------+
-| HealthModule|              | ReportsModule |              | ReportRunsModule|
-+------------+               +-------+-------+              +--------+--------+
-                                     |                               |
-                                     | uses                          | uses
-                           +---------v-------------------------------v---------+
-                           |              ReportOrchestrationModule             |
-                           |   (ReportInstanceRunner, LaunchExecutor, etc.)    |
-                           +--------------------+-------------------------------+
-                                                |
-                                                | needs
-                           +--------------------v--------------------+
-                           |          ReportPersistenceModule         |
-                           |       (ReportInstanceStorePort -> FS)    |
-                           +--------------------+--------------------+
-                                                |
-                     +--------------------------+--------------------------+
-                     |                                                     |
-         +-----------v-----------+                             +-----------v-----------+
-         |   ReportRegistryModule|                             | ExternalServicesModule|
-         |   (ReportRegistry)    |<---------uses---------------| (SharedSettings,      |
-         +-----------+-----------+                             |  ExternalClientFactory)|
-                     |                                         +------------------------+
-                     | uses
-         +-----------v-----------+
-         |   DataAccessModule    |
-         | (Tenant/Sales/etc)    |
-         +-----------------------+
+AppModule
+├─ JwtModule
+├─ AuthModule
+│  └─ JwtModule
+├─ HealthModule
+├─ ReportsModule
+│  ├─ ReportOrchestrationModule
+│  │  ├─ ReportPersistenceModule
+│  │  └─ ReportRegistryModule
+│  │     ├─ DataAccessModule
+│  │     └─ ExternalServicesModule
+│  ├─ ReportPersistenceModule
+│  ├─ ReportRegistryModule
+│  ├─ ExternalServicesModule
+│  └─ DataAccessModule
+└─ ReportRunsModule
+   └─ ReportPersistenceModule
 ```
 
+## Cross-Cutting HTTP Layer
+
+Регистрируется в `AppModule` как global pipeline:
+
+- `APP_GUARD` -> `JwtAuthGuard`;
+- `APP_FILTER` -> `ApiExceptionFilter`;
+- `APP_INTERCEPTOR` -> `RequestLoggingInterceptor`;
+- `RequestIdMiddleware` на все роуты.
+
+Дополнительно:
+
+- `GET /health` и `POST /auth/dev-token` помечены `@Public()`;
+- все business endpoints требуют `Authorization: Bearer <token>`.
+
 ## Imports/Exports and Tokens
+
+### `AuthModule`
+
+- Imports:
+  - `JwtModule.register(...)`
+- Providers:
+  - `DevAuthService`
+- Controllers:
+  - `AuthController`
+- Exports: `-`
 
 ### `HealthModule`
 
@@ -91,7 +97,7 @@
 - Exports:
   - `REPORT_INSTANCE_STORE_TOKEN`
 - Note:
-  - токен должен скрывать concrete storage implementation;
+  - токен скрывает concrete storage implementation;
   - текущий adapter: `FileSystemReportInstanceStore`.
 
 ### `ReportRegistryModule`
@@ -145,29 +151,36 @@
 ### `AppModule`
 
 - Imports:
+  - `JwtModule.register(...)`
+  - `AuthModule`
   - `HealthModule`
   - `ReportsModule`
   - `ReportRunsModule`
+- Providers:
+  - `APP_GUARD`
+  - `APP_FILTER`
+  - `APP_INTERCEPTOR`
 
 ## Responsibility Matrix
 
-| Endpoint                                                                 | Module             | Service                                         | Main Dependencies                                         |
-| ------------------------------------------------------------------------ | ------------------ | ----------------------------------------------- | --------------------------------------------------------- |
-| `GET /health`                                                            | `HealthModule`     | -                                               | -                                                         |
-| `GET /reports`                                                           | `ReportsModule`    | `ReportsQueryService.listReports`               | `REPORT_REGISTRY_TOKEN`                                   |
-| `GET /reports/:code/metadata`                                            | `ReportsModule`    | `ReportsQueryService.getReportMetadata`         | `REPORT_REGISTRY_TOKEN`                                   |
-| `GET /reports/:reportCode/external-services/:serviceKey/shared-settings` | `ReportsModule`    | `ReportsQueryService.listSharedSettings`        | `REPORT_REGISTRY_TOKEN`, `SHARED_SETTINGS_PROVIDER_TOKEN` |
-| `GET /tenants`                                                           | `ReportsModule`    | `ReportsQueryService.listTenants`               | `TENANT_REPOSITORY_TOKEN`                                 |
-| `GET /tenants/:tenantId/organizations`                                   | `ReportsModule`    | `ReportsQueryService.listOrganizationsByTenant` | `TENANT_REPOSITORY_TOKEN`                                 |
-| `POST /reports/:reportCode/launch`                                       | `ReportsModule`    | `ReportsLaunchService.launchReport`             | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_RUNNER_TOKEN`   |
-| `GET /reports/:reportCode/instances`                                     | `ReportsModule`    | `ReportsQueryService.listReportInstances`       | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_STORE_TOKEN`    |
-| `GET /generated-files/:fileId`                                           | `ReportsModule`    | `GeneratedFilesService.downloadGeneratedFile`   | `REPORT_INSTANCE_STORE_TOKEN`                             |
-| `GET /report-runs/:reportInstanceId`                                     | `ReportRunsModule` | `ReportRunsQueryService.getReportInstance`      | `REPORT_INSTANCE_STORE_TOKEN`                             |
+| Endpoint                                                                 | Module             | Service / Controller Method                           | Main Dependencies                                         |
+| ------------------------------------------------------------------------ | ------------------ | ----------------------------------------------------- | --------------------------------------------------------- |
+| `POST /auth/dev-token`                                                   | `AuthModule`       | `DevAuthService.issueDevToken`                        | `JwtModule`, `mockUsers`                                  |
+| `GET /health`                                                            | `HealthModule`     | `HealthController.getHealth`                          | -                                                         |
+| `GET /reports`                                                           | `ReportsModule`    | `ReportsQueryService.listReports`                     | `REPORT_REGISTRY_TOKEN`                                   |
+| `GET /reports/:code/metadata`                                            | `ReportsModule`    | `ReportsQueryService.getReportMetadata`               | `REPORT_REGISTRY_TOKEN`                                   |
+| `GET /reports/:reportCode/external-services/:serviceKey/shared-settings` | `ReportsModule`    | `ReportsQueryService.listSharedSettings`              | `REPORT_REGISTRY_TOKEN`, `SHARED_SETTINGS_PROVIDER_TOKEN` |
+| `GET /tenants`                                                           | `ReportsModule`    | `ReportsQueryService.listTenants`                     | `getAllTenants()` from `@report-platform/data-access`     |
+| `GET /tenants/:tenantId/organizations`                                   | `ReportsModule`    | `ReportsQueryService.listOrganizationsByTenant`       | `getOrganizationsByTenant()` + auth scope checks          |
+| `POST /reports/:reportCode/launch`                                       | `ReportsModule`    | `ReportsLaunchService.launchReport`                   | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_RUNNER_TOKEN`   |
+| `GET /reports/:reportCode/instances`                                     | `ReportsModule`    | `ReportsQueryService.listReportInstancesByReportCode` | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_STORE_TOKEN`    |
+| `GET /generated-files/:fileId`                                           | `ReportsModule`    | `GeneratedFilesService.getGeneratedFile`              | `REPORT_INSTANCE_STORE_TOKEN`                             |
+| `GET /report-runs/:reportInstanceId`                                     | `ReportRunsModule` | `ReportRunsQueryService.getReportInstance`            | `REPORT_INSTANCE_STORE_TOKEN`                             |
 
 ## Boundary Rules
 
-- Controllers остаются thin adapters: request parsing, delegation в сервис, HTTP response mapping.
-- Feature services не создают инфраструктурные зависимости напрямую; только через токены и module imports.
+- Controllers остаются thin adapters: validated request -> service call.
+- HTTP transport concerns (auth/validation/error/logging/request-id) централизованы в global layer.
+- Feature services не создают инфраструктурные зависимости напрямую; только через токены/module imports.
 - `ReportsModule` не должен зависеть от concrete filesystem implementation стора.
-- `ReportOrchestrationModule` содержит orchestration flow, но не HTTP-specific mapping.
-- Переход на другой storage backend в будущем должен происходить заменой provider в `ReportPersistenceModule` без изменения контроллеров.
+- Переход на другой storage backend должен происходить заменой provider в `ReportPersistenceModule` без изменения контроллеров.

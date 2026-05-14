@@ -401,11 +401,11 @@ Launch params описываются в:
 - Сейчас используются mock реализации.
 - Это достаточно для разработки report contract и UI flow, но недостаточно для продовой нагрузки и аудита.
 
-4. Полноценная аутентификация и авторизация
+4. Полноценная аутентификация и авторизация (частично закрыто)
 
-- Сейчас mock user header.
-- Нужны real authn/authz, audit trail и сервисные политики.
-- Подходы вида хранения session/JWT токенов в web storage недопустимы для production; текущий mock-flow оставлен только для ускорения прототипирования.
+- Для `report-api` внедрен базовый JWT flow: global `JwtAuthGuard`, `@CurrentUser()`, route-level Zod pipes, global `ApiExceptionFilter`, request observability middleware/interceptor.
+- Runtime `x-mock-user` из `report-api` удален; business endpoints принимают только `Authorization: Bearer <token>`.
+- Для production остаются задачи: OIDC/IdP интеграция, ротация ключей, токен revocation model, централизованный audit trail и policy governance.
 
 5. Глубокая feature-модульность frontend/backend
 
@@ -425,7 +425,7 @@ P0:
 1. RabbitMQ + BullMQ queue orchestration с retry/DLQ/idempotency.
 2. Замена mock repositories на production adapters.
 3. Object storage для артефактов (S3/MinIO) + metadata store в БД.
-4. Полноценная auth модель (OIDC/JWT/RBAC), запрет `x-mock-user` в runtime.
+4. Полноценная auth модель поверх текущего JWT baseline (OIDC, key rotation, centralized RBAC/policy engine, audit trail hardening).
 5. Наблюдаемость: structured logs, metrics, traces, алерты по SLA/SLO.
 
 P1:

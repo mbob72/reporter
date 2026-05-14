@@ -1,5 +1,23 @@
 # Release Notes
 
+## 2026-05-13
+
+### Summary
+
+Релиз выравнивает auth и transport слой между frontend/backend после перехода `report-api` на JWT-only flow: добавлен demo bootstrap endpoint для токена, фронт перешел на Bearer заголовок, а документация обновлена с точными ссылками на строки кода.
+
+### Main Changes
+
+- `report-api`: добавлен `POST /auth/dev-token` (public, dev-only) для выдачи JWT по `mockUserId`.
+- `report-web`: удалена отправка `x-mock-user`; добавлен bootstrap токена и `Authorization: Bearer ...` для business-запросов.
+- `docs/*`: актуализированы call-chain/worker/presentation/module документы и поправлены устаревшие ссылки на строки.
+
+### Architecture Notes
+
+- Runtime call-chain: [report-runtime-call-chain.md](./report-runtime-call-chain.md).
+- Worker startup chain: [report-worker-startup-flow.md](./report-worker-startup-flow.md).
+- Модульная структура `report-api`: [report-api-modules.md](./report-api-modules.md).
+
 ## 2026-04-29
 
 ### Summary

@@ -23,6 +23,7 @@ type ReportInstanceListProps = {
   items: ReportInstanceListItem[];
   emptyMessage: string;
   actionLabel: string;
+  onActionClick?: (item: ReportInstanceListItem) => void;
   noActionLabel?: string;
   selectable?: boolean;
   selectedSummaryTitle?: string;
@@ -51,6 +52,7 @@ export function ReportInstanceList({
   items,
   emptyMessage,
   actionLabel,
+  onActionClick,
   noActionLabel = 'No file',
   selectable = false,
   selectedSummaryTitle = 'Selected instance',
@@ -155,7 +157,12 @@ export function ReportInstanceList({
                   {item.actionHref ? (
                     <Anchor
                       href={item.actionHref}
-                      onClick={() => {
+                      onClick={(event) => {
+                        if (onActionClick) {
+                          event.preventDefault();
+                          onActionClick(item);
+                        }
+
                         if (selectable) {
                           setSelectedItemId(item.id);
                         }

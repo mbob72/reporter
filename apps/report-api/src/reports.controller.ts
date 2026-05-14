@@ -1,31 +1,23 @@
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Res } from '@nestjs/common';
+
+import type { CurrentUser, LaunchReportBody } from '@report-platform/contracts';
+
+import { CurrentUser as CurrentUserDecorator } from './common/auth/current-user.decorator';
 import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Inject,
-  Logger,
-  Param,
-  Post,
-  Req,
-  Res,
-} from '@nestjs/common';
-
-import { getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
-
-import { toHttpException } from './report-http.helpers';
+  FileIdParamSchema,
+  LaunchReportBodyPayloadSchema,
+  MetadataCodeParamSchema,
+  ReportCodeParamSchema,
+  ServiceKeyParamSchema,
+  TenantIdParamSchema,
+} from './common/pipes/request-schemas';
+import { ZodValidationPipe } from './common/pipes/zod-validation.pipe';
 import { GeneratedFilesService } from './modules/reports/services/generated-files.service';
 import { ReportsLaunchService } from './modules/reports/services/reports-launch.service';
 import { ReportsQueryService } from './modules/reports/services/reports-query.service';
 
-type RequestWithHeaders = {
-  headers: Record<string, string | string[] | undefined>;
-};
-
 @Controller()
 export class ReportsController {
-  private readonly logger = new Logger(ReportsController.name);
-
   constructor(
     @Inject(ReportsQueryService)
     private readonly reportsQueryService: ReportsQueryService,
@@ -37,112 +29,80 @@ export class ReportsController {
 
   @Get('reports')
   @HttpCode(200)
-  async listReports(@Req() req: RequestWithHeaders) {
-    try {
-      const currentUser = getCurrentUser(req.headers);
-      const payload = this.reportsQueryService.listReports();
-
-      this.logger.log(
-        `list reports count=${payload.length} mockUser=${req.headers[MOCK_USER_HEADER] ?? currentUser.userId}`,
-      );
-
-      return payload;
-    } catch (error) {
-      throw toHttpException(error);
-    }
+  listReports() {
+    return this.reportsQueryService.listReports();
   }
 
   @Get('reports/:code/metadata')
   @HttpCode(200)
-  async getReportMetadata(@Param('code') reportCode: string, @Req() req: RequestWithHeaders) {
-    try {
-      return this.reportsQueryService.getReportMetadata(reportCode, req);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+  getReportMetadata(
+    @Param('code', new ZodValidationPipe(MetadataCodeParamSchema, 'Invalid report code.'))
+    reportCode: string,
+    @CurrentUserDecorator() currentUser: CurrentUser,
+  ) {
+    return this.reportsQueryService.getReportMetadata(reportCode, currentUser);
   }
 
   @Get('reports/:reportCode/external-services/:serviceKey/shared-settings')
   @HttpCode(200)
-  async listSharedSettings(
-    @Param('reportCode') reportCode: string,
-    @Param('serviceKey') serviceKey: string,
-    @Req() req: RequestWithHeaders,
+  listSharedSettings(
+    @Param('reportCode', new ZodValidationPipe(ReportCodeParamSchema, 'Invalid report code.'))
+    reportCode: string,
+    @Param('serviceKey', new ZodValidationPipe(ServiceKeyParamSchema, 'Invalid service key.'))
+    serviceKey: string,
+    @CurrentUserDecorator() currentUser: CurrentUser,
   ) {
-    try {
-      return await this.reportsQueryService.listSharedSettings(reportCode, serviceKey, req);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+    return this.reportsQueryService.listSharedSettings(reportCode, serviceKey, currentUser);
   }
 
   @Get('tenants')
   @HttpCode(200)
-  async listTenants(@Req() req: RequestWithHeaders) {
-    try {
-      return this.reportsQueryService.listTenants(req);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+  listTenants(@CurrentUserDecorator() currentUser: CurrentUser) {
+    return this.reportsQueryService.listTenants(currentUser);
   }
 
   @Get('tenants/:tenantId/organizations')
   @HttpCode(200)
-  async listOrganizationsByTenant(
-    @Param('tenantId') tenantId: string,
-    @Req() req: RequestWithHeaders,
+  listOrganizationsByTenant(
+    @Param('tenantId', new ZodValidationPipe(TenantIdParamSchema, 'Invalid tenant id.'))
+    tenantId: string,
+    @CurrentUserDecorator() currentUser: CurrentUser,
   ) {
-    try {
-      return this.reportsQueryService.listOrganizationsByTenant(tenantId, req);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+    return this.reportsQueryService.listOrganizationsByTenant(tenantId, currentUser);
   }
 
   @Post('reports/:reportCode/launch')
   @HttpCode(200)
-  async launchReport(
-    @Param('reportCode') reportCode: string,
-    @Body() body: unknown,
-    @Req() req: RequestWithHeaders,
+  launchReport(
+    @Param('reportCode', new ZodValidationPipe(ReportCodeParamSchema, 'Invalid report code.'))
+    reportCode: string,
+    @Body(new ZodValidationPipe(LaunchReportBodyPayloadSchema, 'Invalid request payload.'))
+    body: LaunchReportBody,
+    @CurrentUserDecorator() currentUser: CurrentUser,
   ) {
-    try {
-      const { launch, mockUser } = await this.reportsLaunchService.launchReport(
-        reportCode,
-        body,
-        req,
-      );
-
-      this.logger.log(`launch report=${reportCode} mockUser=${mockUser}`);
-
-      return launch;
-    } catch (error) {
-      throw toHttpException(error);
-    }
+    return this.reportsLaunchService.launchReport(reportCode, body, currentUser);
   }
 
   @Get('reports/:reportCode/instances')
   @HttpCode(200)
-  async listReportInstancesByReportCode(@Param('reportCode') reportCode: string) {
-    try {
-      return await this.reportsQueryService.listReportInstancesByReportCode(reportCode);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+  listReportInstancesByReportCode(
+    @Param('reportCode', new ZodValidationPipe(ReportCodeParamSchema, 'Invalid report code.'))
+    reportCode: string,
+  ) {
+    return this.reportsQueryService.listReportInstancesByReportCode(reportCode);
   }
 
   @Get('generated-files/:fileId')
   @HttpCode(200)
-  async downloadGeneratedFile(@Param('fileId') fileId: string, @Res() res: any) {
-    try {
-      const generatedFile = await this.generatedFilesService.getGeneratedFile(fileId);
+  async downloadGeneratedFile(
+    @Param('fileId', new ZodValidationPipe(FileIdParamSchema, 'Invalid file id.')) fileId: string,
+    @Res() res: any,
+  ) {
+    const generatedFile = await this.generatedFilesService.getGeneratedFile(fileId);
 
-      res.setHeader('Content-Type', generatedFile.mimeType);
-      res.setHeader('Content-Disposition', `attachment; filename="${generatedFile.fileName}"`);
-      res.setHeader('Content-Length', String(generatedFile.byteLength));
-      res.send(generatedFile.bytes);
-    } catch (error) {
-      throw toHttpException(error);
-    }
+    res.setHeader('Content-Type', generatedFile.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${generatedFile.fileName}"`);
+    res.setHeader('Content-Length', String(generatedFile.byteLength));
+    res.send(generatedFile.bytes);
   }
 }

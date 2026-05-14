@@ -178,9 +178,23 @@ function installMockApiFetch(): () => void {
 
     if (
       pathParts.length === 0 ||
-      (pathParts[0] !== 'reports' && pathParts[0] !== 'tenants' && pathParts[0] !== 'report-runs')
+      (pathParts[0] !== 'reports' &&
+        pathParts[0] !== 'tenants' &&
+        pathParts[0] !== 'report-runs' &&
+        pathParts[0] !== 'auth')
     ) {
       return originalFetch(input, init);
+    }
+
+    if (
+      method === 'POST' &&
+      pathParts.length === 2 &&
+      pathParts[0] === 'auth' &&
+      pathParts[1] === 'dev-token'
+    ) {
+      return jsonResponse({
+        accessToken: 'storybook-dev-token',
+      });
     }
 
     if (method === 'GET' && pathParts.length === 1 && pathParts[0] === 'reports') {

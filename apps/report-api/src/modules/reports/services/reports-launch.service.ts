@@ -1,16 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { getCurrentUser, MOCK_USER_HEADER } from '@report-platform/auth';
-import { LaunchReportBodySchema, type ApiError } from '@report-platform/contracts';
+import { type ApiError, type CurrentUser, type LaunchReportBody } from '@report-platform/contracts';
 import { ReportRegistry } from '@report-platform/registry';
 
 import { hasRoleAccess } from '../../../report-http.helpers';
 import { ReportInstanceRunner } from '../../../report-instance.runner';
 import { REPORT_INSTANCE_RUNNER_TOKEN, REPORT_REGISTRY_TOKEN } from '../../../reporting.tokens';
-
-type RequestWithHeaders = {
-  headers: Record<string, string | string[] | undefined>;
-};
 
 @Injectable()
 export class ReportsLaunchService {
@@ -21,16 +16,7 @@ export class ReportsLaunchService {
     private readonly reportInstanceRunner: ReportInstanceRunner,
   ) {}
 
-  async launchReport(reportCode: string, body: unknown, request: RequestWithHeaders) {
-    const parsedBody = LaunchReportBodySchema.safeParse(body);
-
-    if (!parsedBody.success) {
-      throw {
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid request payload.',
-      } satisfies ApiError;
-    }
-
+  async launchReport(reportCode: string, body: LaunchReportBody, currentUser: CurrentUser) {
     const reportDefinition = this.reportRegistry.getReport(reportCode);
 
     if (!reportDefinition) {
@@ -40,7 +26,6 @@ export class ReportsLaunchService {
       } satisfies ApiError;
     }
 
-    const currentUser = getCurrentUser(request.headers);
     const reportMetadata = reportDefinition.getMetadata(currentUser);
 
     if (!hasRoleAccess(currentUser.role, reportMetadata.minRoleToLaunch)) {
@@ -50,9 +35,7 @@ export class ReportsLaunchService {
       } satisfies ApiError;
     }
 
-    const parsedLaunchParams = reportDefinition.launchParamsSchema.safeParse(
-      parsedBody.data.params,
-    );
+    const parsedLaunchParams = reportDefinition.launchParamsSchema.safeParse(body.params);
 
     if (!parsedLaunchParams.success) {
       throw {
@@ -61,13 +44,10 @@ export class ReportsLaunchService {
       } satisfies ApiError;
     }
 
-    return {
-      launch: await this.reportInstanceRunner.start({
-        reportCode,
-        currentUser,
-        params: parsedLaunchParams.data,
-      }),
-      mockUser: request.headers[MOCK_USER_HEADER] ?? currentUser.userId,
-    };
+    return this.reportInstanceRunner.start({
+      reportCode,
+      currentUser,
+      params: parsedLaunchParams.data,
+    });
   }
 }

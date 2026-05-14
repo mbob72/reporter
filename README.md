@@ -143,6 +143,9 @@ Required GitHub Secrets для deploy:
 
 ## Текущая runtime-модель отчетов
 
+Все business endpoint-ы `report-api` требуют `Authorization: Bearer <token>`. Исключение: `GET /health`.
+Для локального demo flow доступен `POST /auth/dev-token` (public endpoint), который выдает JWT по `mockUserId` и используется `report-web` для инициализации токена без хардкода.
+
 1. `POST /reports/:reportCode/launch` -> backend сразу возвращает `{ reportInstanceId, status: 'queued' }`.
 2. Асинхронная генерация выполняется во fork worker.
 3. UI поллит `GET /report-runs/:reportInstanceId`.

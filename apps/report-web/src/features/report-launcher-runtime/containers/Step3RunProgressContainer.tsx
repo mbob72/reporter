@@ -115,17 +115,20 @@ export function Step3RunProgressContainer() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { reportInstanceId = '' } = useParams();
+  const accessToken = useAppSelector((state) => state.session.accessToken);
   const cachedInstance = useAppSelector(
     reportApi.endpoints.getReportInstance.select(reportInstanceId),
   );
   const isTerminalStatus = isTerminalReportStatus(cachedInstance.data?.status);
 
   const reportInstanceQuery = useGetReportInstanceQuery(reportInstanceId, {
-    skip: reportInstanceId.trim().length === 0,
+    skip: !accessToken || reportInstanceId.trim().length === 0,
     pollingInterval: isTerminalStatus ? 0 : 1000,
     refetchOnMountOrArgChange: true,
   });
-  const reportsQuery = useListReportsQuery();
+  const reportsQuery = useListReportsQuery(undefined, {
+    skip: !accessToken,
+  });
 
   const reportName = useMemo(() => {
     if (!reportInstanceQuery.data) {

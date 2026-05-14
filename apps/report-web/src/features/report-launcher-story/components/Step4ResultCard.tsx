@@ -6,11 +6,17 @@ import { StepFooterActions } from './StepFooterActions';
 
 type Step4ResultCardProps = {
   result: Step4ResultModel;
+  onArtifactActionClick?: (input: { id: string; label: string; actionHref: string }) => void;
   onRunAgain?: () => void;
   onBackToReports?: () => void;
 };
 
-export function Step4ResultCard({ result, onRunAgain, onBackToReports }: Step4ResultCardProps) {
+export function Step4ResultCard({
+  result,
+  onArtifactActionClick,
+  onRunAgain,
+  onBackToReports,
+}: Step4ResultCardProps) {
   return (
     <Card
       withBorder
@@ -68,6 +74,17 @@ export function Step4ResultCard({ result, onRunAgain, onBackToReports }: Step4Re
                   }))}
                   emptyMessage="No artifact history yet for this report type."
                   actionLabel="Open"
+                  onActionClick={(item) => {
+                    if (!item.actionHref || !onArtifactActionClick) {
+                      return;
+                    }
+
+                    onArtifactActionClick({
+                      id: item.id,
+                      label: item.label,
+                      actionHref: item.actionHref,
+                    });
+                  }}
                   noActionLabel="Unavailable"
                   selectable
                   selectedSummaryTitle="Selected instance"
