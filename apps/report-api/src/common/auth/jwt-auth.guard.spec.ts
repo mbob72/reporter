@@ -79,7 +79,7 @@ describe('JwtAuthGuard', () => {
       tenantId: null,
       organizationId: null,
     };
-    const token = sign(claims, process.env.JWT_SECRET, {
+    const token = sign({ ...claims, type: 'access' }, process.env.JWT_SECRET, {
       algorithm: 'HS256',
       expiresIn: '10m',
     });
@@ -93,5 +93,29 @@ describe('JwtAuthGuard', () => {
 
     expect(allowed).toBe(true);
     expect(request.user).toEqual(claims);
+  });
+
+  it('rejects refresh token on protected routes', async () => {
+    process.env.JWT_SECRET = 'test-secret';
+
+    const reflector = {
+      getAllAndOverride: vi.fn().mockReturnValue(false),
+    } as unknown as Reflector;
+    const guard = new JwtAuthGuard(reflector, new JwtService());
+
+    const token = sign({ userId: 'user-1', type: 'refresh' }, process.env.JWT_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: '10m',
+    });
+
+    await expect(
+      guard.canActivate(
+        createExecutionContext({
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

@@ -26,8 +26,12 @@ const sessionSlice = createSlice({
     clearAccessToken(state) {
       state.accessToken = null;
     },
+    clearSession(state) {
+      state.accessToken = null;
+    },
   },
 });
 
-export const { selectMockUser, setAccessToken, clearAccessToken } = sessionSlice.actions;
+export const { selectMockUser, setAccessToken, clearAccessToken, clearSession } =
+  sessionSlice.actions;
 export const sessionReducer = sessionSlice.reducer;

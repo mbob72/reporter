@@ -1,10 +1,10 @@
 import { Card, Container, Stack, Stepper, Text, Title } from '@mantine/core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 import { useAppDispatch, useAppSelector } from '../../../app/hooks';
-import { useIssueDevTokenMutation } from '../api/reportApi';
-import { clearAccessToken, setAccessToken } from '../store/sessionSlice';
+import { useIssueDevTokenMutation, useLogoutSessionMutation } from '../api/reportApi';
+import { clearSession, setAccessToken } from '../store/sessionSlice';
 
 function getActiveStep(pathname: string): number {
   if (pathname.startsWith('/report-runs/') && pathname.endsWith('/result')) {
@@ -28,41 +28,63 @@ export function ReportLaunchShell() {
   const selectedMockUserId = useAppSelector((state) => state.session.selectedMockUserId);
   const accessToken = useAppSelector((state) => state.session.accessToken);
   const [authError, setAuthError] = useState<string | null>(null);
+  const selectedMockUserIdRef = useRef(selectedMockUserId);
   const [issueDevToken, issueDevTokenState] = useIssueDevTokenMutation();
+  const [logoutSession] = useLogoutSessionMutation();
   const activeStep = useMemo(() => getActiveStep(location.pathname), [location.pathname]);
 
   useEffect(() => {
     let isCancelled = false;
+    const didUserChange = selectedMockUserIdRef.current !== selectedMockUserId;
 
-    if (accessToken) {
+    if (!didUserChange && accessToken) {
       return () => {
         isCancelled = true;
       };
     }
 
-    setAuthError(null);
-    void issueDevToken({ mockUserId: selectedMockUserId })
-      .unwrap()
-      .then((payload) => {
+    const runAuthFlow = async () => {
+      if (didUserChange) {
+        selectedMockUserIdRef.current = selectedMockUserId;
+        dispatch(clearSession());
+
+        try {
+          await logoutSession().unwrap();
+        } catch {
+          // Continue with token re-issue even if previous session logout failed.
+        }
+      }
+
+      if (isCancelled) {
+        return;
+      }
+
+      setAuthError(null);
+
+      try {
+        const payload = await issueDevToken({ mockUserId: selectedMockUserId }).unwrap();
+
         if (isCancelled) {
           return;
         }
 
         dispatch(setAccessToken(payload.accessToken));
-      })
-      .catch(() => {
+      } catch {
         if (isCancelled) {
           return;
         }
 
-        dispatch(clearAccessToken());
+        dispatch(clearSession());
         setAuthError('Failed to initialize demo auth token.');
-      });
+      }
+    };
+
+    void runAuthFlow();
 
     return () => {
       isCancelled = true;
     };
-  }, [accessToken, dispatch, issueDevToken, selectedMockUserId]);
+  }, [accessToken, dispatch, issueDevToken, logoutSession, selectedMockUserId]);
 
   return (
     <div className="h-screen w-full overflow-hidden bg-slate-100/90 p-2 sm:p-4 lg:p-8">

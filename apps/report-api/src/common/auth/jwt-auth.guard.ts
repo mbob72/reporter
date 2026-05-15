@@ -20,7 +20,7 @@ type RequestWithUser = {
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  private readonly jwtConfig = getJwtRuntimeConfig();
+  private readonly jwtConfig = getJwtRuntimeConfig('access');
 
   constructor(
     @Inject(Reflector)
@@ -51,6 +51,11 @@ export class JwtAuthGuard implements CanActivate {
         secret: this.jwtConfig.secret,
         ...this.jwtConfig.verifyOptions,
       });
+
+      if (payload.type !== 'access') {
+        throw new UnauthorizedException('Invalid JWT token type.');
+      }
+
       const parsedUser = CurrentUserSchema.safeParse(payload);
 
       if (!parsedUser.success) {

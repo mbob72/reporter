@@ -1,8 +1,13 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import {
+  createApi,
+  fetchBaseQuery,
+  type BaseQueryFn,
+  type FetchArgs,
+  type FetchBaseQueryError,
+} from '@reduxjs/toolkit/query/react';
 import { z } from 'zod';
 
 import {
-  ReportCodeSchema,
   ReportInstanceListResponseSchema,
   ReportInstanceSchema,
   ReportLaunchAcceptedSchema,
@@ -19,6 +24,7 @@ import {
   type SharedSettingOption,
 } from '@report-platform/contracts';
 import { resolveGeneratedFileName } from '../lib/downloadGeneratedFile';
+import { clearSession, setAccessToken } from '../store/sessionSlice';
 
 const TenantOptionSchema = z.object({
   id: z.string().trim().min(1),
@@ -36,10 +42,18 @@ const OrganizationOptionListSchema = z.array(OrganizationOptionSchema);
 const IssueDevTokenResponseSchema = z.object({
   accessToken: z.string().trim().min(1),
 });
+const RefreshSessionResponseSchema = z.object({
+  accessToken: z.string().trim().min(1),
+});
+const LogoutResponseSchema = z.object({
+  success: z.boolean(),
+});
 
 export type TenantOption = z.infer<typeof TenantOptionSchema>;
 export type OrganizationOption = z.infer<typeof OrganizationOptionSchema>;
 export type IssueDevTokenResponse = z.infer<typeof IssueDevTokenResponseSchema>;
+export type RefreshSessionResponse = z.infer<typeof RefreshSessionResponseSchema>;
+export type LogoutResponse = z.infer<typeof LogoutResponseSchema>;
 export type DownloadGeneratedFileResponse = {
   fileBlob: Blob;
   fileName: string;
@@ -59,23 +73,75 @@ export function buildGeneratedFileDownloadUrl(artifactId: string): string {
   return `/generated-files/${encodeURIComponent(artifactId)}`;
 }
 
+const apiBaseUrl =
+  typeof window === 'undefined' ? 'http://localhost/' : `${window.location.origin}/`;
+
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: apiBaseUrl,
+  credentials: 'include',
+  prepareHeaders: (headers, { getState }) => {
+    const state = getState() as {
+      session?: { accessToken?: string | null };
+    };
+    const accessToken = state.session?.accessToken;
+
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    return headers;
+  },
+});
+
+const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions,
+) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error?.status !== 401) {
+    return result;
+  }
+
+  const shouldSkipRefresh =
+    (typeof args === 'string' && args.startsWith('auth/')) ||
+    (typeof args !== 'string' && typeof args.url === 'string' && args.url.startsWith('auth/'));
+
+  if (shouldSkipRefresh) {
+    return result;
+  }
+
+  const refreshResult = await rawBaseQuery(
+    {
+      url: 'auth/refresh',
+      method: 'POST',
+    },
+    api,
+    extraOptions,
+  );
+
+  if (refreshResult.data) {
+    const refreshPayload = parseWithSchema(
+      RefreshSessionResponseSchema,
+      refreshResult.data,
+      'Invalid refresh session payload.',
+    );
+
+    api.dispatch(setAccessToken(refreshPayload.accessToken));
+    result = await rawBaseQuery(args, api, extraOptions);
+
+    return result;
+  }
+
+  api.dispatch(clearSession());
+
+  return result;
+};
+
 export const reportApi = createApi({
   reducerPath: 'reportApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: '/',
-    prepareHeaders: (headers, { getState }) => {
-      const state = getState() as {
-        session?: { accessToken?: string | null };
-      };
-      const accessToken = state.session?.accessToken;
-
-      if (accessToken) {
-        headers.set('Authorization', `Bearer ${accessToken}`);
-      }
-
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithReauth,
   endpoints: (builder) => ({
     listReports: builder.query<ReportListItem[], void>({
       query: () => ({
@@ -95,6 +161,22 @@ export const reportApi = createApi({
       }),
       transformResponse: (response: unknown) =>
         parseWithSchema(IssueDevTokenResponseSchema, response, 'Invalid dev token payload.'),
+    }),
+    refreshSession: builder.mutation<RefreshSessionResponse, void>({
+      query: () => ({
+        url: 'auth/refresh',
+        method: 'POST',
+      }),
+      transformResponse: (response: unknown) =>
+        parseWithSchema(RefreshSessionResponseSchema, response, 'Invalid refresh payload.'),
+    }),
+    logoutSession: builder.mutation<LogoutResponse, void>({
+      query: () => ({
+        url: 'auth/logout',
+        method: 'POST',
+      }),
+      transformResponse: (response: unknown) =>
+        parseWithSchema(LogoutResponseSchema, response, 'Invalid logout payload.'),
     }),
     getReportMetadata: builder.query<ReportMetadata, string>({
       query: (reportCode) => ({
@@ -215,6 +297,8 @@ export const reportApi = createApi({
 
 export const {
   useIssueDevTokenMutation,
+  useRefreshSessionMutation,
+  useLogoutSessionMutation,
   useListReportsQuery,
   useGetReportMetadataQuery,
   useListTenantsQuery,

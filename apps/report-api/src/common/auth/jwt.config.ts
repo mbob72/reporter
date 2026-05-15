@@ -17,10 +17,13 @@ const JWT_ALGORITHMS = new Set<Algorithm>([
   'none',
 ]);
 
+export type JwtTokenKind = 'access' | 'refresh';
+
 type JwtRuntimeConfig = {
   secret: string;
   verifyOptions: VerifyOptions;
   algorithm: Algorithm;
+  expiresIn: string;
 };
 
 function normalizeAlgorithm(rawAlgorithm: string | undefined): Algorithm {
@@ -47,8 +50,24 @@ function parseClockTolerance(rawClockTolerance: string | undefined): number | un
   return parsedTolerance;
 }
 
-export function getJwtRuntimeConfig(): JwtRuntimeConfig {
-  const secret = process.env.JWT_SECRET ?? 'dev-secret-change-me';
+function getRawSecret(tokenKind: JwtTokenKind): string {
+  if (tokenKind === 'refresh') {
+    return process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? 'dev-secret-change-me';
+  }
+
+  return process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? 'dev-secret-change-me';
+}
+
+function getRawExpiresIn(tokenKind: JwtTokenKind): string {
+  if (tokenKind === 'refresh') {
+    return process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+  }
+
+  return process.env.JWT_ACCESS_EXPIRES_IN ?? process.env.JWT_EXPIRES_IN ?? '15m';
+}
+
+export function getJwtRuntimeConfig(tokenKind: JwtTokenKind = 'access'): JwtRuntimeConfig {
+  const secret = getRawSecret(tokenKind);
   const issuer = process.env.JWT_ISSUER;
   const audience = process.env.JWT_AUDIENCE;
   const algorithm = normalizeAlgorithm(process.env.JWT_ALG);
@@ -74,11 +93,12 @@ export function getJwtRuntimeConfig(): JwtRuntimeConfig {
     secret,
     verifyOptions,
     algorithm,
+    expiresIn: getRawExpiresIn(tokenKind),
   };
 }
 
-export function getJwtModuleOptions(): JwtModuleOptions {
-  const config = getJwtRuntimeConfig();
+export function getJwtModuleOptions(tokenKind: JwtTokenKind = 'access'): JwtModuleOptions {
+  const config = getJwtRuntimeConfig(tokenKind);
 
   return {
     secret: config.secret,
