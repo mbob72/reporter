@@ -89,7 +89,8 @@ export function useStep2LaunchConfigurationViewModel({
   const selectedOrganizationId = useAppSelector((state) => state.launcher.selectedOrganizationId);
   const launchDraft = useAppSelector((state) => state.launcher.launchDraft);
 
-  const currentUser = mockUsers[selectedMockUserId] ?? mockUsers[DEFAULT_MOCK_USER_ID];
+  const effectiveMockUserId = selectedMockUserId ?? DEFAULT_MOCK_USER_ID;
+  const currentUser = mockUsers[effectiveMockUserId] ?? mockUsers[DEFAULT_MOCK_USER_ID];
   const externalDependencyServiceKey = metadata?.externalDependencies[0]?.serviceKey;
 
   const hasLaunchAccess = metadata
@@ -136,7 +137,7 @@ export function useStep2LaunchConfigurationViewModel({
       reportTitle: metadata?.title ?? selectedReport?.title ?? selectedReportCode,
       reportDescription: metadata?.description ?? selectedReport?.description ?? 'Report launch',
       contextSummary: formatContextSummary({
-        mockUserId: selectedMockUserId,
+        mockUserId: effectiveMockUserId,
         role: currentUser.role,
         selectedTenantId,
         selectedOrganizationId,
@@ -180,7 +181,7 @@ export function useStep2LaunchConfigurationViewModel({
       metadata,
       selectedReport,
       selectedReportCode,
-      selectedMockUserId,
+      effectiveMockUserId,
       currentUser.role,
       selectedTenantId,
       selectedOrganizationId,

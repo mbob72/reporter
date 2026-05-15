@@ -12,6 +12,7 @@ import { RefreshSessionStore } from './refresh-session.store';
 export type IssueDevTokenResult = {
   accessToken: string;
   refreshToken: string;
+  mockUserId: MockUserId;
 };
 
 @Injectable()
@@ -30,7 +31,8 @@ export class DevAuthService {
   issueDevToken(mockUserId: string): IssueDevTokenResult {
     this.ensureDevAuthEnabled();
 
-    const currentUser = this.resolveCurrentUser(mockUserId);
+    const userEntry = this.resolveUserEntryByMockUserId(mockUserId);
+    const currentUser = userEntry.currentUser;
     const accessToken = this.signAccessToken(currentUser);
     const refreshToken = this.signRefreshToken(currentUser);
     const refreshTokenExpiration = this.resolveExpirationDate(refreshToken);
@@ -44,6 +46,7 @@ export class DevAuthService {
     return {
       accessToken,
       refreshToken,
+      mockUserId: userEntry.mockUserId,
     };
   }
 
@@ -63,7 +66,8 @@ export class DevAuthService {
     }
 
     const claims = this.verifyRefreshToken(refreshToken);
-    const currentUser = this.resolveCurrentUserById(claims.userId);
+    const userEntry = this.resolveUserEntryByUserId(claims.userId);
+    const currentUser = userEntry.currentUser;
     const accessToken = this.signAccessToken(currentUser);
     const nextRefreshToken = this.signRefreshToken(currentUser);
     const nextExpiration = this.resolveExpirationDate(nextRefreshToken);
@@ -78,6 +82,7 @@ export class DevAuthService {
     return {
       accessToken,
       refreshToken: nextRefreshToken,
+      mockUserId: userEntry.mockUserId,
     };
   }
 
@@ -104,7 +109,10 @@ export class DevAuthService {
     }
   }
 
-  private resolveCurrentUser(mockUserId: string): CurrentUser {
+  private resolveUserEntryByMockUserId(mockUserId: string): {
+    mockUserId: MockUserId;
+    currentUser: CurrentUser;
+  } {
     const currentUser = mockUsers[mockUserId as MockUserId] as CurrentUser | undefined;
 
     if (!currentUser) {
@@ -114,17 +122,28 @@ export class DevAuthService {
       } satisfies ApiError;
     }
 
-    return currentUser;
+    return {
+      mockUserId: mockUserId as MockUserId,
+      currentUser,
+    };
   }
 
-  private resolveCurrentUserById(userId: string): CurrentUser {
-    const currentUser = Object.values(mockUsers).find((user) => user.userId === userId);
+  private resolveUserEntryByUserId(userId: string): {
+    mockUserId: MockUserId;
+    currentUser: CurrentUser;
+  } {
+    const entry = Object.entries(mockUsers).find(([, user]) => user.userId === userId);
 
-    if (!currentUser) {
+    if (!entry) {
       throw this.unauthorized('User is no longer available.');
     }
 
-    return currentUser;
+    const [mockUserId, currentUser] = entry;
+
+    return {
+      mockUserId: mockUserId as MockUserId,
+      currentUser,
+    };
   }
 
   private signAccessToken(currentUser: CurrentUser): string {

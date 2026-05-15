@@ -197,6 +197,18 @@ function installMockApiFetch(): () => void {
       });
     }
 
+    if (
+      method === 'POST' &&
+      pathParts.length === 2 &&
+      pathParts[0] === 'auth' &&
+      pathParts[1] === 'refresh'
+    ) {
+      return jsonResponse({
+        accessToken: 'storybook-refresh-token',
+        mockUserId: 'tenant-admin-1',
+      });
+    }
+
     if (method === 'GET' && pathParts.length === 1 && pathParts[0] === 'reports') {
       return jsonResponse(reportListPayload);
     }

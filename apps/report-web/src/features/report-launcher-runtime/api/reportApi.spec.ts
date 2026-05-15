@@ -22,7 +22,10 @@ describe('reportApi baseQueryWithReauth', () => {
         new Response(JSON.stringify({ code: 'UNAUTHORIZED' }), { status: 401 }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ accessToken: 'next-access-token' }), { status: 200 }),
+        new Response(
+          JSON.stringify({ accessToken: 'next-access-token', mockUserId: 'tenant-admin-1' }),
+          { status: 200 },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(

@@ -29,7 +29,7 @@ export function Step1ReportSelectionContainer() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadGeneratedFile] = useDownloadGeneratedFileMutation();
   const selectedReportCode = useAppSelector((state) => state.launcher.selectedReportCode);
-  const currentUser = mockUsers[selectedMockUserId];
+  const currentUser = selectedMockUserId ? mockUsers[selectedMockUserId] : null;
 
   const reportsQuery = useListReportsQuery(undefined, {
     skip: !accessToken,
@@ -43,7 +43,9 @@ export function Step1ReportSelectionContainer() {
     const reportList = reportsQuery.data ?? [];
 
     return reportList.map((report) => {
-      const hasAccess = hasRoleAccess(currentUser.role, report.minRoleToLaunch);
+      const hasAccess = currentUser
+        ? hasRoleAccess(currentUser.role, report.minRoleToLaunch)
+        : false;
 
       return {
         code: report.code,
@@ -54,13 +56,14 @@ export function Step1ReportSelectionContainer() {
         unavailableReason: hasAccess ? undefined : ('insufficient_role' as const),
       };
     });
-  }, [currentUser.role, reportsQuery.data]);
+  }, [currentUser, reportsQuery.data]);
 
   const selectedReport = reportSelectionItems.find((report) => report.code === selectedReportCode);
 
   const canProceedToConfigure = selectedReport?.availability === 'available';
   const canOpenReadyInstanceLinks = Boolean(
     selectedReport?.availability === 'available' &&
+      currentUser &&
       hasRoleAccess(currentUser.role, selectedReport.minRoleToLaunch),
   );
 
@@ -106,12 +109,16 @@ export function Step1ReportSelectionContainer() {
     [downloadGeneratedFile],
   );
 
+  if (!selectedMockUserId || !currentUser) {
+    return null;
+  }
+
   return (
     <Stack gap="md" pt="md" pb="xs" className="h-full min-h-0">
       <Step1ReportSelectionCard
         users={users}
         reports={reportSelectionItems}
-        selectedUserId={selectedMockUserId}
+        selectedUserId={selectedMockUserId ?? ''}
         selectedReportCode={selectedReportCode}
         readyInstances={readyInstances}
         canContinueToLaunchConfig={

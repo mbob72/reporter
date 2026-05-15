@@ -37,6 +37,13 @@ export function ReportLaunchShell() {
     let isCancelled = false;
     const didUserChange = selectedMockUserIdRef.current !== selectedMockUserId;
 
+    if (!selectedMockUserId) {
+      dispatch(clearSession());
+      return () => {
+        isCancelled = true;
+      };
+    }
+
     if (!didUserChange && accessToken) {
       return () => {
         isCancelled = true;

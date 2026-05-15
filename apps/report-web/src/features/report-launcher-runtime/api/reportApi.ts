@@ -6,6 +6,7 @@ import {
   type FetchBaseQueryError,
 } from '@reduxjs/toolkit/query/react';
 import { z } from 'zod';
+import type { MockUserId } from '@report-platform/auth';
 
 import {
   ReportInstanceListResponseSchema,
@@ -24,7 +25,7 @@ import {
   type SharedSettingOption,
 } from '@report-platform/contracts';
 import { resolveGeneratedFileName } from '../lib/downloadGeneratedFile';
-import { clearSession, setAccessToken } from '../store/sessionSlice';
+import { clearSession, selectMockUser, setAccessToken } from '../store/sessionSlice';
 
 const TenantOptionSchema = z.object({
   id: z.string().trim().min(1),
@@ -41,9 +42,11 @@ const TenantOptionListSchema = z.array(TenantOptionSchema);
 const OrganizationOptionListSchema = z.array(OrganizationOptionSchema);
 const IssueDevTokenResponseSchema = z.object({
   accessToken: z.string().trim().min(1),
+  mockUserId: z.string().trim().min(1),
 });
 const RefreshSessionResponseSchema = z.object({
   accessToken: z.string().trim().min(1),
+  mockUserId: z.string().trim().min(1),
 });
 const LogoutResponseSchema = z.object({
   success: z.boolean(),
@@ -128,6 +131,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
       'Invalid refresh session payload.',
     );
 
+    api.dispatch(selectMockUser(refreshPayload.mockUserId as MockUserId));
     api.dispatch(setAccessToken(refreshPayload.accessToken));
     result = await rawBaseQuery(args, api, extraOptions);
 

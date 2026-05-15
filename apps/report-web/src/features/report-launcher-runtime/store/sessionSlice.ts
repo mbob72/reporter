@@ -1,22 +1,24 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-import { DEFAULT_MOCK_USER_ID, type MockUserId } from '@report-platform/auth';
+import type { MockUserId } from '@report-platform/auth';
 
 type SessionState = {
-  selectedMockUserId: MockUserId;
+  selectedMockUserId: MockUserId | null;
   accessToken: string | null;
+  isBootstrapped: boolean;
 };
 
 const initialState: SessionState = {
-  selectedMockUserId: DEFAULT_MOCK_USER_ID,
+  selectedMockUserId: null,
   accessToken: null,
+  isBootstrapped: false,
 };
 
 const sessionSlice = createSlice({
   name: 'session',
   initialState,
   reducers: {
-    selectMockUser(state, action: PayloadAction<MockUserId>) {
+    selectMockUser(state, action: PayloadAction<MockUserId | null>) {
       state.selectedMockUserId = action.payload;
       state.accessToken = null;
     },
@@ -27,11 +29,20 @@ const sessionSlice = createSlice({
       state.accessToken = null;
     },
     clearSession(state) {
+      state.selectedMockUserId = null;
       state.accessToken = null;
+    },
+    markSessionBootstrapped(state) {
+      state.isBootstrapped = true;
     },
   },
 });
 
-export const { selectMockUser, setAccessToken, clearAccessToken, clearSession } =
-  sessionSlice.actions;
+export const {
+  selectMockUser,
+  setAccessToken,
+  clearAccessToken,
+  clearSession,
+  markSessionBootstrapped,
+} = sessionSlice.actions;
 export const sessionReducer = sessionSlice.reducer;

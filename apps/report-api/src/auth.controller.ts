@@ -35,6 +35,7 @@ export class AuthController {
 
     return {
       accessToken: session.accessToken,
+      mockUserId: session.mockUserId,
     };
   }
 
@@ -57,6 +58,7 @@ export class AuthController {
 
     return {
       accessToken: session.accessToken,
+      mockUserId: session.mockUserId,
     };
   }
 

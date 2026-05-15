@@ -60,10 +60,10 @@ function getRawSecret(tokenKind: JwtTokenKind): string {
 
 function getRawExpiresIn(tokenKind: JwtTokenKind): string {
   if (tokenKind === 'refresh') {
-    return process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+    return process.env.JWT_REFRESH_EXPIRES_IN ?? '5m';
   }
 
-  return process.env.JWT_ACCESS_EXPIRES_IN ?? process.env.JWT_EXPIRES_IN ?? '15m';
+  return process.env.JWT_ACCESS_EXPIRES_IN ?? process.env.JWT_EXPIRES_IN ?? '1m';
 }
 
 export function getJwtRuntimeConfig(tokenKind: JwtTokenKind = 'access'): JwtRuntimeConfig {

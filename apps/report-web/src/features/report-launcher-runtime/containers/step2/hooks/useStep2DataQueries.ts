@@ -20,18 +20,18 @@ export function useStep2DataQueries() {
     skip: !accessToken || selectedReportCode.trim().length === 0,
   });
 
-  const tenantsQuery = useListTenantsQuery(selectedMockUserId, {
-    skip: !accessToken,
+  const tenantsQuery = useListTenantsQuery(selectedMockUserId ?? undefined, {
+    skip: !accessToken || !selectedMockUserId,
     refetchOnMountOrArgChange: true,
   });
 
   const organizationsQuery = useListOrganizationsByTenantQuery(
     {
       tenantId: selectedTenantId,
-      mockUserId: selectedMockUserId,
+      mockUserId: selectedMockUserId ?? undefined,
     },
     {
-      skip: !accessToken || selectedTenantId.trim().length === 0,
+      skip: !accessToken || !selectedMockUserId || selectedTenantId.trim().length === 0,
       refetchOnMountOrArgChange: true,
     },
   );
