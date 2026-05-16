@@ -8,3 +8,4 @@ export * from './report-instance.contract';
 export * from './report-metadata.contract';
 export * from './shared-settings.contract';
 export * from './reports';
+export * from './worker-pool-status.contract';
