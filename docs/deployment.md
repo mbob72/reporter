@@ -87,6 +87,12 @@ curl -fsS https://<your-domain>/health
 curl -fsSI https://<your-domain>/
 ```
 
+Дополнительная операционная проверка runtime-слоя (требуется JWT пользователя с ролью `Admin`):
+
+```bash
+curl -fsS -H "Authorization: Bearer <admin-jwt>" https://<your-domain>/admin/worker-pool/status
+```
+
 ## 7. Как работает auto-deploy
 
 `deploy.yml` делает на сервере:
@@ -110,4 +116,5 @@ curl -fsSI https://<your-domain>/
 2. Автоматизированные post-deploy проверки и rollback policy по сигналам мониторинга.
 3. Security gates в pipeline (SAST/SCA/container scan/SBOM).
 4. Управление секретами production уровня (vault/secret manager, ротация).
-5. KEDA/HPA autoscaling policy для worker-контуров и операционные метрики очереди (backlog/stalled/error rates).
+5. Infra-level autoscaling worker-контуров через KEDA/HPA + scheduler/resource policy (application-level autoscaling policy уже реализована в `report-api`).
+6. Интеграция bull-board и time-series метрик очереди (backlog/stalled/error rates) в мониторинг/алертинг.

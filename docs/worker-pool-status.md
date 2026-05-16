@@ -113,18 +113,28 @@ export const WorkerPoolStatusSchema = z.object({
 
 ## 6. Текущий статус реализации
 
-На текущем шаге часть полей `pool/autoscaling` является базовой runtime-моделью до внедрения полного autoscaling controller:
+Реализованы:
 
-- `targetWorkers` сейчас берется из `WORKER_POOL_MIN` (fallback `1`);
-- `actualWorkers` приравнен к `targetWorkers`;
-- `drainingWorkers` фиксирован в `0`;
-- `lastScaleAt` пока `null`.
+- живой state manager (`WorkerPoolStateService`) для:
+  - `targetWorkers`
+  - `actualWorkers`
+  - `scalingState`
+  - `lastScaleAt`
+  - `cooldownUntilMs`
+- application-level autoscaling policy (`WorkerAutoscalingPolicyService`):
+  - thresholds `min/mid/max`,
+  - `scale up/down` по `waiting backlog`,
+  - cooldown anti-flapping,
+  - периодическая переоценка (`WORKER_SCALE_EVALUATION_INTERVAL_MS`).
 
-Это ожидаемо на этапе внедрения status endpoint; полноценная динамика будет добавлена в шаге autoscaling policy.
+Технические детали текущей модели:
+
+- `drainingWorkers` пока фиксирован в `0` (graceful drain lifecycle будет расширен отдельно).
+- `actualWorkers` в текущем варианте моделируется в приложении (reconcile к `targetWorkers`) и не отражает k8s pod state напрямую.
+- `cooldownRemainingMs` вычисляется из `cooldownUntilMs - now`.
 
 ## 7. Связанные следующие шаги
 
-1. Реализовать application-level autoscaling policy (`thresholds + cooldown`).
-2. Вынести живой state manager для `target/actual/scalingState/lastScaleAt`.
-3. Добавить metrics endpoint и интеграцию с monitoring/alerts.
-4. Подключить bull-board для админ-наблюдаемости jobs/errors/retries.
+1. Добавить metrics endpoint и интеграцию с monitoring/alerts.
+2. Подключить bull-board для админ-наблюдаемости jobs/errors/retries.
+3. Расширить модель `actual/draining` до инфраструктурно-истинной (учет реальных worker instances/pods).

@@ -8,6 +8,7 @@
 - [docs/how-to-add-report.md](./docs/how-to-add-report.md) - пошаговая инструкция добавления нового отчета.
 - [docs/report-runtime-call-chain.md](./docs/report-runtime-call-chain.md) - сценарии вызовов между архитектурными блоками.
 - [docs/report-api-modules.md](./docs/report-api-modules.md) - модульная структура Nest API и матрица ответственности endpoint-ов.
+- [docs/worker-pool-status.md](./docs/worker-pool-status.md) - контракт и semantics `GET /admin/worker-pool/status`.
 - [docs/frontend-backend-block-separation.md](./docs/frontend-backend-block-separation.md) - изменения по блокам Frontend/Backend.
 - [docs/release-notes.md](./docs/release-notes.md) - журнал релизных изменений.
 - [docs/deployment.md](./docs/deployment.md) - deploy-контур и ограничения текущего CI/CD.
@@ -156,6 +157,7 @@ Required GitHub Secrets для deploy:
 5. По завершению артефакт доступен через `GET /generated-files/:fileId`.
 6. История запусков по коду отчета: `GET /reports/:reportCode/instances`.
 7. Политики `critical/non-critical`, retry и fallback для внешних зависимостей: [docs/external-dependency-resilience.md](./docs/external-dependency-resilience.md).
+8. Операционный runtime-status endpoint: `GET /admin/worker-pool/status` (доступ только для роли `Admin` через `@Roles` + `RolesGuard`).
 
 ## Legacy API термины
 
@@ -228,6 +230,7 @@ docs/
 ## Важные ограничения текущей версии
 
 - Queue orchestration использует BullMQ + Redis; worker запускается отдельным процессом.
+- Runtime status endpoint `GET /admin/worker-pool/status` предназначен для операционного мониторинга и ограничен ролью `Admin`.
 - Репозитории доступа к данным пока mock-реализации.
 - CI/CD контур есть, но не доведен до production-grade.
 

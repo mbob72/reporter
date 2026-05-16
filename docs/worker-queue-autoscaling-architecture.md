@@ -8,10 +8,17 @@
   - `report-api` создает `queued` instance и enqueue job в BullMQ.
   - выделенный `report-worker` процесс поднимается отдельно (`start:worker`) и исполняет jobs.
   - business status обновляется через `FileSystemReportInstanceStore` (`queued/running/completed/failed`).
+  - application-level autoscaling policy (`WORKER_POOL_MIN/MID/MAX`, thresholds, cooldown, evaluation interval):
+    [`worker-autoscaling-policy.service.ts`](../apps/report-api/src/modules/runtime-status/services/worker-autoscaling-policy.service.ts)
+  - `GET /admin/worker-pool/status` endpoint (`@Roles('Admin')`) и контрактный ответ
+    (`queueCounters + pool + autoscaling`):
+    [`runtime-status.controller.ts`](../apps/report-api/src/runtime-status.controller.ts),
+    [`worker-pool-status.contract.ts`](../libs/report-platform/contracts/src/worker-pool-status.contract.ts)
+  - state manager для `target/actual/scalingState/lastScaleAt/cooldown`:
+    [`worker-pool-state.service.ts`](../apps/report-api/src/modules/runtime-status/services/worker-pool-state.service.ts)
 - Еще не реализовано:
-  - autoscaling policy (`WORKER_POOL_MIN/MID/MAX`, thresholds, cooldown),
-  - `worker-pool status` endpoint/метрики,
-  - bull-board integration.
+  - bull-board integration;
+  - infra-level autoscaling (KEDA/HPA) как production deployment-контур.
 
 ## 1. Введение и цель
 
@@ -218,12 +225,18 @@ UI читает эти статусы через `GET /report-runs/:reportInstan
 
 ## Через backend метрики/endpoint (рекомендуется)
 
-Минимальный `worker-pool status` endpoint/метрики должны включать:
+Текущий `worker-pool status` endpoint уже включает:
 
 - queue counters,
 - worker pool state (`target/actual/idle/busy/draining`),
 - autoscaling state (`scalingState`, cooldown),
-- error/stalled rates.
+- `lastScaleAt`.
+
+Ограничения текущей v1 реализации:
+
+- `drainingWorkers` пока всегда `0`;
+- `actualWorkers` — application-level model в `WorkerPoolStateService`, а не факт по инфраструктуре pod/process;
+- отдельные `error/stalled rates` как time-series метрики пока не вынесены.
 
 ## Минимальный on-call checklist
 
@@ -248,7 +261,8 @@ UI читает эти статусы через `GET /report-runs/:reportInstan
   - `REPORT_JOB_REMOVE_ON_COMPLETE`
   - `REPORT_JOB_REMOVE_ON_FAIL`
 
-Примечание: `REPORT_JOB_TIMEOUT_MS` уже присутствует в config, но в текущей реализации `queue.add(...)` еще не использует timeout как `jobs option`.
+Примечание: `REPORT_JOB_TIMEOUT_MS` уже присутствует в config, но в текущей реализации `queue.add(...)` еще не использует timeout как `jobs option`:
+[`report-job.queue.ts#L22`](../apps/report-api/src/report-job.queue.ts#L22).
 
 - Worker pool sizing
   - `WORKER_POOL_MIN=5`
@@ -270,10 +284,12 @@ UI читает эти статусы через `GET /report-runs/:reportInstan
 
 ## Policy for v1 (зафиксировать)
 
-- Ступенчатый scaling по queue depth:
+- Реализованный ступенчатый scaling по queue depth:
   - `5 -> 10 -> 15` при росте waiting backlog,
   - `15 -> 10 -> 5` при спаде,
   - с обязательным cooldown для анти-флаппинга.
+- Периодическая оценка policy выполняется таймером `WORKER_SCALE_EVALUATION_INTERVAL_MS`:
+  [`worker-autoscaling-policy.service.ts#L58`](../apps/report-api/src/modules/runtime-status/services/worker-autoscaling-policy.service.ts#L58).
 
 ## 8. Test/Acceptance DoD
 

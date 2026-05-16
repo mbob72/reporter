@@ -4,44 +4,38 @@ import { WorkerPoolStatusSchema } from '@report-platform/contracts';
 
 import { ReportJobQueue } from '../../../report-job.queue';
 import { REPORT_JOB_QUEUE_TOKEN } from '../../../reporting.tokens';
-
-function parseNumber(raw: string | undefined, fallback: number): number {
-  const value = Number.parseInt(raw ?? '', 10);
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function parseCooldownMs(raw: string | undefined): number {
-  return Math.max(0, parseNumber(raw, 0));
-}
+import { WorkerPoolStateService } from './worker-pool-state.service';
 
 @Injectable()
 export class WorkerPoolStatusService {
   constructor(
     @Inject(REPORT_JOB_QUEUE_TOKEN)
     private readonly reportJobQueue: ReportJobQueue,
+    @Inject(WorkerPoolStateService)
+    private readonly stateService: WorkerPoolStateService,
   ) {}
 
   async getStatus() {
     const queueCounters = await this.reportJobQueue.getJobCounts();
-
-    const targetWorkers = Math.max(1, parseNumber(process.env.WORKER_POOL_MIN, 1));
-    const actualWorkers = targetWorkers;
-    const busyWorkers = Math.min(actualWorkers, queueCounters.active);
-    const idleWorkers = Math.max(0, actualWorkers - busyWorkers);
-    const cooldownRemainingMs = parseCooldownMs(process.env.WORKER_SCALE_COOLDOWN_MS);
+    const snapshot = this.stateService.getSnapshot(Date.now());
+    const busyWorkers = Math.min(snapshot.actualWorkers, queueCounters.active);
+    const idleWorkers = Math.max(0, snapshot.actualWorkers - busyWorkers);
+    const cooldownRemainingMs = snapshot.cooldownUntilMs
+      ? Math.max(0, snapshot.cooldownUntilMs - Date.now())
+      : 0;
 
     return WorkerPoolStatusSchema.parse({
       queueCounters,
       pool: {
-        targetWorkers,
-        actualWorkers,
+        targetWorkers: snapshot.targetWorkers,
+        actualWorkers: snapshot.actualWorkers,
         idleWorkers,
         busyWorkers,
         drainingWorkers: 0,
       },
       autoscaling: {
-        scalingState: cooldownRemainingMs > 0 ? 'cooldown' : 'stable',
-        lastScaleAt: null,
+        scalingState: snapshot.scalingState,
+        lastScaleAt: snapshot.lastScaleAt,
         cooldownRemainingMs,
       },
     });

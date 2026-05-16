@@ -12,16 +12,19 @@
    [`jwt-auth.guard.ts#L65`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L65).
 3. `@CurrentUser()` извлекает пользователя из request context:
    [`current-user.decorator.ts#L9`](../apps/report-api/src/common/auth/current-user.decorator.ts#L9).
-4. Route-level `ZodValidationPipe` валидирует `@Param/@Body`:
+4. `RolesGuard` применяет декларативные role-ограничения через `@Roles(...)`:
+   [`roles.guard.ts`](../apps/report-api/src/common/auth/roles.guard.ts),
+   [`roles.decorator.ts`](../apps/report-api/src/common/auth/roles.decorator.ts).
+5. Route-level `ZodValidationPipe` валидирует `@Param/@Body`:
    [`zod-validation.pipe.ts#L5`](../apps/report-api/src/common/pipes/zod-validation.pipe.ts#L5).
-5. Thin controllers делегируют в services:
+6. Thin controllers делегируют в services:
    [`reports.controller.ts#L20`](../apps/report-api/src/reports.controller.ts#L20),
    [`report-runs.controller.ts#L8`](../apps/report-api/src/report-runs.controller.ts#L8).
-6. `ApiExceptionFilter` маппит доменные/transport ошибки в API response:
+7. `ApiExceptionFilter` маппит доменные/transport ошибки в API response:
    [`api-exception.filter.ts#L34`](../apps/report-api/src/common/filters/api-exception.filter.ts#L34).
-7. `RequestLoggingInterceptor` пишет structured request logs:
+8. `RequestLoggingInterceptor` пишет structured request logs:
    [`request-logging.interceptor.ts#L22`](../apps/report-api/src/common/interceptors/request-logging.interceptor.ts#L22).
-8. Глобальная регистрация pipeline в `AppModule`:
+9. Глобальная регистрация pipeline в `AppModule`:
    [`app.module.ts#L16`](../apps/report-api/src/app.module.ts#L16),
    [`app.module.ts#L24`](../apps/report-api/src/app.module.ts#L24),
    [`app.module.ts#L40`](../apps/report-api/src/app.module.ts#L40).
@@ -87,7 +90,16 @@
    [`reports-query.service.ts#L113`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L113),
    [`reports-query.service.ts#L124`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L124).
 
-## 5. Public endpoints
+## 5. Runtime status flow (`GET /admin/worker-pool/status`)
+
+1. Endpoint находится в `RuntimeStatusController` и защищен `@Roles('Admin')`:
+   [`runtime-status.controller.ts`](../apps/report-api/src/runtime-status.controller.ts).
+2. `WorkerPoolStatusService` агрегирует:
+   - queue counters из BullMQ (`ReportJobQueue.getJobCounts()`),
+   - текущий snapshot state manager (`WorkerPoolStateService`).
+3. `WorkerAutoscalingPolicyService` в фоне обновляет `target/actual/scalingState/lastScaleAt/cooldown` по thresholds + cooldown.
+
+## 6. Public endpoints
 
 Public routes:
 
@@ -96,7 +108,7 @@ Public routes:
 - `POST /auth/refresh`: [`auth.controller.ts#L42`](../apps/report-api/src/auth.controller.ts#L42)
 - `POST /auth/logout`: [`auth.controller.ts#L65`](../apps/report-api/src/auth.controller.ts#L65)
 
-## 6. Runtime Notes
+## 7. Runtime Notes
 
 - `report-instance.worker.ts` и IPC `fork per request` больше не участвуют в основном launch flow.
 - `REPORT_JOB_TIMEOUT_MS` сейчас читается в config, но в `queue.add(...)` не применяется напрямую (только `attempts/backoff/removeOn*`):
