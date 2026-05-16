@@ -18,6 +18,7 @@
 
 - Контроллер: [`apps/report-api/src/runtime-status.controller.ts`](../apps/report-api/src/runtime-status.controller.ts)
 - Сервис агрегации: [`apps/report-api/src/modules/runtime-status/services/worker-pool-status.service.ts`](../apps/report-api/src/modules/runtime-status/services/worker-pool-status.service.ts)
+- Metrics exporter: [`apps/report-api/src/modules/runtime-status/services/runtime-metrics.service.ts`](../apps/report-api/src/modules/runtime-status/services/runtime-metrics.service.ts)
 - Контракт: [`libs/report-platform/contracts/src/worker-pool-status.contract.ts`](../libs/report-platform/contracts/src/worker-pool-status.contract.ts)
 - Queue counters: [`apps/report-api/src/report-job.queue.ts`](../apps/report-api/src/report-job.queue.ts)
 
@@ -135,6 +136,13 @@ export const WorkerPoolStatusSchema = z.object({
 
 ## 7. Связанные следующие шаги
 
-1. Добавить metrics endpoint и интеграцию с monitoring/alerts.
-2. Подключить bull-board для админ-наблюдаемости jobs/errors/retries.
+Реализовано дополнительно:
+
+1. `GET /admin/metrics` (Prometheus text format) для queue/pool/process метрик.
+2. bull-board подключен в API runtime и доступен по `BULL_BOARD_BASE_PATH` (по умолчанию `/admin/queues`), защищен Basic Auth (`BULL_BOARD_USERNAME`/`BULL_BOARD_PASSWORD`).
+
+Актуальные следующие шаги:
+
+1. Интегрировать scraping/alerts policy (Prometheus/Grafana/Alertmanager) в окружения.
+2. Добавить отдельные rate-метрики `failed/stalled` и latency histograms.
 3. Расширить модель `actual/draining` до инфраструктурно-истинной (учет реальных worker instances/pods).

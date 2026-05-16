@@ -27,6 +27,10 @@ services:
       GENERATED_REPORTS_DIR: ${GENERATED_REPORTS_DIR:-/var/lib/reporter/generated-reports}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
+      BULL_BOARD_ENABLED: ${BULL_BOARD_ENABLED:-true}
+      BULL_BOARD_BASE_PATH: ${BULL_BOARD_BASE_PATH:-/admin/queues}
+      BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME}
+      BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD}
     volumes:
       - generated_reports:/var/lib/reporter/generated-reports
     depends_on:

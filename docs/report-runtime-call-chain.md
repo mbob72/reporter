@@ -99,7 +99,24 @@
    - текущий snapshot state manager (`WorkerPoolStateService`).
 3. `WorkerAutoscalingPolicyService` в фоне обновляет `target/actual/scalingState/lastScaleAt/cooldown` по thresholds + cooldown.
 
-## 6. Public endpoints
+## 6. Runtime metrics flow (`GET /admin/metrics`)
+
+1. Endpoint находится в `RuntimeStatusController` и защищен `@Roles('Admin')`:
+   [`runtime-status.controller.ts#L21`](../apps/report-api/src/runtime-status.controller.ts#L21).
+2. `RuntimeMetricsService` формирует Prometheus text payload из:
+   - queue counters (`ReportJobQueue.getJobCounts()`),
+   - pool state snapshot (`WorkerPoolStateService.getSnapshot(...)`),
+   - process memory gauges.
+
+## 7. Bull-board admin flow (`/admin/queues` by default)
+
+1. В `main.ts` после bootstrap вызывается `setupBullBoard(app)`:
+   [`main.ts#L31`](../apps/report-api/src/main.ts#L31).
+2. Setup регистрирует `createBullBoard(...)` с BullMQ queue adapter и Express router:
+   [`bull-board.setup.ts`](../apps/report-api/src/bull-board.setup.ts).
+3. Доступ к UI закрыт Basic Auth middleware (`BULL_BOARD_USERNAME`/`BULL_BOARD_PASSWORD`).
+
+## 8. Public endpoints
 
 Public routes:
 
@@ -108,7 +125,7 @@ Public routes:
 - `POST /auth/refresh`: [`auth.controller.ts#L42`](../apps/report-api/src/auth.controller.ts#L42)
 - `POST /auth/logout`: [`auth.controller.ts#L65`](../apps/report-api/src/auth.controller.ts#L65)
 
-## 7. Runtime Notes
+## 9. Runtime Notes
 
 - `report-instance.worker.ts` и IPC `fork per request` больше не участвуют в основном launch flow.
 - `REPORT_JOB_TIMEOUT_MS` сейчас читается в config, но в `queue.add(...)` не применяется напрямую (только `attempts/backoff/removeOn*`):

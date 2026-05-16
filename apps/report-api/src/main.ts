@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
+import { setupBullBoard } from './bull-board.setup';
 
 function parsePort(rawPort: string | undefined, fallbackPort: number): number {
   const parsedPort = Number.parseInt(rawPort ?? '', 10);
@@ -27,6 +28,7 @@ async function bootstrap() {
     credentials: true,
   });
 
+  setupBullBoard(app);
   await app.listen(port, host);
 }
 

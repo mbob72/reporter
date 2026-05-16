@@ -55,4 +55,8 @@ export class ReportJobQueue {
       delayed: counts.delayed ?? 0,
     };
   }
+
+  getQueue(): Queue<ReportJobPayload> {
+    return this.queue;
+  }
 }

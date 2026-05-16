@@ -16,8 +16,9 @@
     [`worker-pool-status.contract.ts`](../libs/report-platform/contracts/src/worker-pool-status.contract.ts)
   - state manager для `target/actual/scalingState/lastScaleAt/cooldown`:
     [`worker-pool-state.service.ts`](../apps/report-api/src/modules/runtime-status/services/worker-pool-state.service.ts)
+  - bull-board integration c Basic Auth:
+    [`bull-board.setup.ts`](../apps/report-api/src/bull-board.setup.ts)
 - Еще не реализовано:
-  - bull-board integration;
   - infra-level autoscaling (KEDA/HPA) как production deployment-контур.
 
 ## 1. Введение и цель

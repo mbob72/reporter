@@ -70,6 +70,13 @@ cd /opt/reporter
 
 Создать `.env.production` по шаблону `.env.production.example`.
 
+Для observability/admin функций обязательно заполнить:
+
+- `BULL_BOARD_ENABLED`
+- `BULL_BOARD_BASE_PATH`
+- `BULL_BOARD_USERNAME`
+- `BULL_BOARD_PASSWORD`
+
 ## 6. Первый запуск
 
 ```bash
@@ -91,6 +98,13 @@ curl -fsSI https://<your-domain>/
 
 ```bash
 curl -fsS -H "Authorization: Bearer <admin-jwt>" https://<your-domain>/admin/worker-pool/status
+curl -fsS -H "Authorization: Bearer <admin-jwt>" https://<your-domain>/admin/metrics
+```
+
+bull-board проверка (Basic Auth):
+
+```bash
+curl -fsSI -u "<BULL_BOARD_USERNAME>:<BULL_BOARD_PASSWORD>" https://<your-domain>/admin/queues
 ```
 
 ## 7. Как работает auto-deploy
@@ -117,4 +131,4 @@ curl -fsS -H "Authorization: Bearer <admin-jwt>" https://<your-domain>/admin/wor
 3. Security gates в pipeline (SAST/SCA/container scan/SBOM).
 4. Управление секретами production уровня (vault/secret manager, ротация).
 5. Infra-level autoscaling worker-контуров через KEDA/HPA + scheduler/resource policy (application-level autoscaling policy уже реализована в `report-api`).
-6. Интеграция bull-board и time-series метрик очереди (backlog/stalled/error rates) в мониторинг/алертинг.
+6. Интеграция time-series метрик очереди (backlog/stalled/error rates) в мониторинг/алертинг и алерт-правила.

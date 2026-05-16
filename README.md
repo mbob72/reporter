@@ -50,6 +50,11 @@ pnpm dev:docker
 - `pnpm dev:docker:logs`
 - `pnpm dev:docker:down`
 
+Примечание для queue history в dev:
+
+- По умолчанию в `docker-compose.dev.yml` включено
+  `REPORT_JOB_REMOVE_ON_COMPLETE=false`, поэтому completed jobs сохраняются и видны в bull-board.
+
 ### 3. Docker Preview (prod-like локальный smoke)
 
 ```bash
@@ -158,6 +163,8 @@ Required GitHub Secrets для deploy:
 6. История запусков по коду отчета: `GET /reports/:reportCode/instances`.
 7. Политики `critical/non-critical`, retry и fallback для внешних зависимостей: [docs/external-dependency-resilience.md](./docs/external-dependency-resilience.md).
 8. Операционный runtime-status endpoint: `GET /admin/worker-pool/status` (доступ только для роли `Admin` через `@Roles` + `RolesGuard`).
+9. Операционные метрики: `GET /admin/metrics` (Prometheus формат, также только роль `Admin`).
+10. Queue UI: bull-board (`/admin/queues` по умолчанию) с Basic Auth (`BULL_BOARD_USERNAME`/`BULL_BOARD_PASSWORD`).
 
 ## Legacy API термины
 

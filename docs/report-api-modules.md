@@ -69,6 +69,8 @@ Public endpoints:
 - `POST /auth/logout`: [`auth.controller.ts#L65`](../apps/report-api/src/auth.controller.ts#L65)
 - `GET /admin/worker-pool/status` (`@Roles('Admin')`):
   [`runtime-status.controller.ts#L13`](../apps/report-api/src/runtime-status.controller.ts#L13)
+- `GET /admin/metrics` (`@Roles('Admin')`):
+  [`runtime-status.controller.ts#L21`](../apps/report-api/src/runtime-status.controller.ts#L21)
 
 ## Imports / Exports and Tokens
 
@@ -141,6 +143,8 @@ Public endpoints:
     [`worker-autoscaling-policy.service.ts#L43`](../apps/report-api/src/modules/runtime-status/services/worker-autoscaling-policy.service.ts#L43)
   - `WorkerPoolStatusService` (queue counters + pool snapshot aggregation):
     [`worker-pool-status.service.ts#L10`](../apps/report-api/src/modules/runtime-status/services/worker-pool-status.service.ts#L10)
+  - `RuntimeMetricsService` (Prometheus text metrics для queue/pool/process):
+    [`runtime-metrics.service.ts#L11`](../apps/report-api/src/modules/runtime-status/services/runtime-metrics.service.ts#L11)
 - Controllers: `RuntimeStatusController` ([`runtime-status.module.ts#L12`](../apps/report-api/src/modules/runtime-status.module.ts#L12))
 
 ### `WorkerAppModule` (worker process)
@@ -151,21 +155,22 @@ Public endpoints:
 
 ## Responsibility Matrix
 
-| Endpoint / Runtime                   | Module                | Service / Method                             | Main dependencies                                       |
-| ------------------------------------ | --------------------- | -------------------------------------------- | ------------------------------------------------------- |
-| `POST /auth/dev-token`               | `AuthModule`          | `DevAuthService.issueDevToken`               | `JwtModule`, `mockUsers`                                |
-| `POST /auth/refresh`                 | `AuthModule`          | `DevAuthService.refreshSession`              | `JwtModule`, refresh-session store                      |
-| `POST /auth/logout`                  | `AuthModule`          | `DevAuthService.revokeSession`               | refresh-session store                                   |
-| `GET /health`                        | `HealthModule`        | `HealthController.getHealth`                 | -                                                       |
-| `GET /reports`                       | `ReportsModule`       | `ReportsQueryService.listReports`            | `REPORT_REGISTRY_TOKEN`                                 |
-| `GET /reports/:code/metadata`        | `ReportsModule`       | `ReportsQueryService.getReportMetadata`      | `REPORT_REGISTRY_TOKEN`                                 |
-| `POST /reports/:reportCode/launch`   | `ReportsModule`       | `ReportsLaunchService.launchReport`          | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_RUNNER_TOKEN` |
-| enqueue в BullMQ                     | `ReportQueueModule`   | `ReportJobQueue.enqueue`                     | `resolveReportQueueConfig`, Redis                       |
-| job execution                        | `WorkerAppModule`     | `ReportJobProcessor.process`                 | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_STORE_TOKEN`  |
-| `GET /admin/worker-pool/status`      | `RuntimeStatusModule` | `WorkerPoolStatusService.getStatus`          | `REPORT_JOB_QUEUE_TOKEN`, `WorkerPoolStateService`      |
-| `GET /reports/:reportCode/instances` | `ReportsModule`       | `ReportsQueryService.listReportInstances...` | `REPORT_INSTANCE_STORE_TOKEN`, `REPORT_REGISTRY_TOKEN`  |
-| `GET /generated-files/:fileId`       | `ReportsModule`       | `GeneratedFilesService.getGeneratedFile`     | `REPORT_INSTANCE_STORE_TOKEN`                           |
-| `GET /report-runs/:reportInstanceId` | `ReportRunsModule`    | `ReportRunsQueryService.getReportInstance`   | `REPORT_INSTANCE_STORE_TOKEN`                           |
+| Endpoint / Runtime                   | Module                | Service / Method                                | Main dependencies                                       |
+| ------------------------------------ | --------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `POST /auth/dev-token`               | `AuthModule`          | `DevAuthService.issueDevToken`                  | `JwtModule`, `mockUsers`                                |
+| `POST /auth/refresh`                 | `AuthModule`          | `DevAuthService.refreshSession`                 | `JwtModule`, refresh-session store                      |
+| `POST /auth/logout`                  | `AuthModule`          | `DevAuthService.revokeSession`                  | refresh-session store                                   |
+| `GET /health`                        | `HealthModule`        | `HealthController.getHealth`                    | -                                                       |
+| `GET /reports`                       | `ReportsModule`       | `ReportsQueryService.listReports`               | `REPORT_REGISTRY_TOKEN`                                 |
+| `GET /reports/:code/metadata`        | `ReportsModule`       | `ReportsQueryService.getReportMetadata`         | `REPORT_REGISTRY_TOKEN`                                 |
+| `POST /reports/:reportCode/launch`   | `ReportsModule`       | `ReportsLaunchService.launchReport`             | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_RUNNER_TOKEN` |
+| enqueue в BullMQ                     | `ReportQueueModule`   | `ReportJobQueue.enqueue`                        | `resolveReportQueueConfig`, Redis                       |
+| job execution                        | `WorkerAppModule`     | `ReportJobProcessor.process`                    | `REPORT_REGISTRY_TOKEN`, `REPORT_INSTANCE_STORE_TOKEN`  |
+| `GET /admin/worker-pool/status`      | `RuntimeStatusModule` | `WorkerPoolStatusService.getStatus`             | `REPORT_JOB_QUEUE_TOKEN`, `WorkerPoolStateService`      |
+| `GET /admin/metrics`                 | `RuntimeStatusModule` | `RuntimeMetricsService.renderPrometheusMetrics` | `REPORT_JOB_QUEUE_TOKEN`, `WorkerPoolStateService`      |
+| `GET /reports/:reportCode/instances` | `ReportsModule`       | `ReportsQueryService.listReportInstances...`    | `REPORT_INSTANCE_STORE_TOKEN`, `REPORT_REGISTRY_TOKEN`  |
+| `GET /generated-files/:fileId`       | `ReportsModule`       | `GeneratedFilesService.getGeneratedFile`        | `REPORT_INSTANCE_STORE_TOKEN`                           |
+| `GET /report-runs/:reportInstanceId` | `ReportRunsModule`    | `ReportRunsQueryService.getReportInstance`      | `REPORT_INSTANCE_STORE_TOKEN`                           |
 
 ## Boundary Rules
 
@@ -174,4 +179,5 @@ Public endpoints:
 - `report-api` не выполняет тяжелый report computation; только enqueue и read APIs.
 - `WorkerAppModule` изолирует execution runtime в отдельном процессе.
 - runtime-наблюдаемость и application-level autoscaling политика изолированы в `RuntimeStatusModule`.
+- bull-board UI подключается на bootstrap-уровне (`main.ts`) и использует provider очереди через DI.
 - Смена storage backend делается на уровне provider в `ReportPersistenceModule`, без изменения контроллеров.
