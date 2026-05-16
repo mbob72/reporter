@@ -27,8 +27,10 @@
   [`reports.controller.ts#L83`](../apps/report-api/src/reports.controller.ts#L83).
 - Валидация `params` через `launchParamsSchema` выбранного definition в сервисном слое:
   [`reports-launch.service.ts#L38`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38).
-- В раннере внутренняя нормализация параметров для worker выделена в отдельный шаг:
-  [`report-instance.runner.ts#L177`](../apps/report-api/src/report-instance.runner.ts#L177).
+- В раннере launch-flow разделен на `queued instance` + `enqueue job`, а внутренняя нормализация params выделена в отдельный шаг:
+  [`report-instance.runner.ts#L44`](../apps/report-api/src/report-instance.runner.ts#L44),
+  [`report-instance.runner.ts#L49`](../apps/report-api/src/report-instance.runner.ts#L49),
+  [`report-instance.runner.ts#L62`](../apps/report-api/src/report-instance.runner.ts#L62).
 - Global HTTP слой централизован (`JWT guard`, `filter`, `interceptor`, `request-id middleware`):
   [`app.module.ts#L24`](../apps/report-api/src/app.module.ts#L24),
   [`app.module.ts#L30`](../apps/report-api/src/app.module.ts#L30),

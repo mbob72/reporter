@@ -1,13 +1,24 @@
 # Worker Queue & Autoscaling Architecture
 
-Документ фиксирует целевую архитектуру выполнения отчетов через очередь BullMQ, выделенный worker-сервис и инфраструктурный автоскейлинг.
+Документ фиксирует архитектуру выполнения отчетов через очередь BullMQ, выделенный worker-сервис и инфраструктурный автоскейлинг.
+
+## Статус реализации (May 2026)
+
+- Реализовано:
+  - `report-api` создает `queued` instance и enqueue job в BullMQ.
+  - выделенный `report-worker` процесс поднимается отдельно (`start:worker`) и исполняет jobs.
+  - business status обновляется через `FileSystemReportInstanceStore` (`queued/running/completed/failed`).
+- Еще не реализовано:
+  - autoscaling policy (`WORKER_POOL_MIN/MID/MAX`, thresholds, cooldown),
+  - `worker-pool status` endpoint/метрики,
+  - bull-board integration.
 
 ## 1. Введение и цель
 
-## Проблема текущего подхода
+## Проблема исторического подхода
 
-Сейчас runtime запускает генерацию отчета через `fork per request` внутри `report-api` процесса.
-Это работает для малого объема, но с ростом нагрузки приводит к ограничениям:
+Изначально runtime запускал генерацию отчета через `fork per request` внутри `report-api` процесса.
+Этот подход был заменен queue-based flow, так как при росте нагрузки возникали ограничения:
 
 - API и execution конкурируют за одни и те же ресурсы процесса/контейнера.
 - Нет полноценного orchestration слоя очереди (retry/backoff/stalled lifecycle на уровне системы очередей).
@@ -236,6 +247,8 @@ UI читает эти статусы через `GET /report-runs/:reportInstan
   - `REPORT_JOB_TIMEOUT_MS`
   - `REPORT_JOB_REMOVE_ON_COMPLETE`
   - `REPORT_JOB_REMOVE_ON_FAIL`
+
+Примечание: `REPORT_JOB_TIMEOUT_MS` уже присутствует в config, но в текущей реализации `queue.add(...)` еще не использует timeout как `jobs option`.
 
 - Worker pool sizing
   - `WORKER_POOL_MIN=5`

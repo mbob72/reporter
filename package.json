@@ -5,6 +5,7 @@
   "packageManager": "pnpm@7.33.7",
   "scripts": {
     "start:api": "tsx watch --tsconfig apps/report-api/tsconfig.json apps/report-api/src/main.ts",
+    "start:worker": "tsx watch --tsconfig apps/report-api/tsconfig.json apps/report-api/src/report-worker.main.ts",
     "start:web": "vite --config apps/report-web/vite.config.ts",
     "dev:docker": "docker compose -f docker-compose.dev.yml up --build",
     "dev:docker:attach": "docker compose -f docker-compose.dev.yml up --build -d && pnpm dev:docker:logs",
@@ -75,6 +76,7 @@
     "@nestjs/platform-express": "^9.4.3",
     "@reduxjs/toolkit": "^2.11.2",
     "@vitejs/plugin-react": "^4.2.1",
+    "bullmq": "^5.53.2",
     "express": "^4.18.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

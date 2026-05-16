@@ -1,5 +1,25 @@
 # Release Notes
 
+## 2026-05-16
+
+### Summary
+
+Релиз переводит runtime отчетов на queue-based execution (`BullMQ + Redis`) с отдельным `report-worker` процессом и выделенной модульностью под worker runtime.
+
+### Main Changes
+
+- `report-api`: launch flow стал `create queued instance -> enqueue BullMQ job`.
+- `report-worker`: отдельный `start:worker` entrypoint на `Nest ApplicationContext` (`WorkerAppModule` + `ReportWorkerRuntimeService` + `ReportJobProcessor`).
+- `report-api` modules: выделен `ReportQueueModule`, orchestration теперь импортирует queue provider через токен.
+- `docs/*`: обновлены call-chain/module/startup/presentation документы под новый runtime flow со ссылками на строки кода.
+
+### Architecture Notes
+
+- Runtime chain: [report-runtime-call-chain.md](./report-runtime-call-chain.md).
+- Worker startup: [report-worker-startup-flow.md](./report-worker-startup-flow.md).
+- Module graph: [report-api-modules.md](./report-api-modules.md).
+- Target architecture/status: [worker-queue-autoscaling-architecture.md](./worker-queue-autoscaling-architecture.md).
+
 ## 2026-05-13
 
 ### Summary

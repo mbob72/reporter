@@ -24,6 +24,26 @@ services:
       - redis
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/api.dev.Dockerfile
+    working_dir: /workspace
+    command: >-
+      bash -lc "pnpm install --frozen-lockfile && pnpm start:worker"
+    environment:
+      PNPM_STORE_DIR: /pnpm/store
+      GENERATED_REPORTS_DIR: ${GENERATED_REPORTS_DIR:-/workspace/.generated-reports}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    volumes:
+      - .:/workspace
+      - worker_node_modules:/workspace/node_modules
+      - worker_pnpm_store:/pnpm/store
+    depends_on:
+      - redis
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -58,6 +78,8 @@ services:
 volumes:
   api_node_modules:
   api_pnpm_store:
+  worker_node_modules:
+  worker_pnpm_store:
   web_node_modules:
   web_pnpm_store:
   redis_data:

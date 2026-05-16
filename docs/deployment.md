@@ -14,7 +14,7 @@
 
 ## 2. Что используется
 
-- `docker-compose.prod.yml` - compose для `reverse-proxy + api + web + redis`.
+- `docker-compose.prod.yml` - compose для `reverse-proxy + api + worker + web + redis`.
 - `docker/Caddyfile` - reverse proxy (Caddy) с TLS.
 - `.env.production` - серверные переменные.
 - GHCR образы:
@@ -110,4 +110,4 @@ curl -fsSI https://<your-domain>/
 2. Автоматизированные post-deploy проверки и rollback policy по сигналам мониторинга.
 3. Security gates в pipeline (SAST/SCA/container scan/SBOM).
 4. Управление секретами production уровня (vault/secret manager, ротация).
-5. Контур очередей для background jobs (RabbitMQ + BullMQ) и отдельные worker deployment units.
+5. KEDA/HPA autoscaling policy для worker-контуров и операционные метрики очереди (backlog/stalled/error rates).

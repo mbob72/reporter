@@ -20,6 +20,7 @@
 ```bash
 pnpm install
 pnpm start:api
+pnpm start:worker
 pnpm start:web
 ```
 
@@ -39,6 +40,7 @@ pnpm dev:docker
 
 - Web: `http://localhost:4200`
 - API: `http://localhost:3000`
+- Worker: background process (`report-worker`, no public port)
 - Redis: `localhost:6379`
 
 Полезные команды:
@@ -57,6 +59,7 @@ pnpm preview:docker
 
 - Web: `http://localhost:4200`
 - API: `http://localhost:3000`
+- Worker: background process (`report-worker`, no public port)
 - Redis: `localhost:6379`
 
 Полезные команды:
@@ -147,11 +150,12 @@ Required GitHub Secrets для deploy:
 Для локального demo flow доступен `POST /auth/dev-token` (public endpoint), который выдает JWT по `mockUserId` и используется `report-web` для инициализации токена без хардкода.
 
 1. `POST /reports/:reportCode/launch` -> backend сразу возвращает `{ reportInstanceId, status: 'queued' }`.
-2. Асинхронная генерация выполняется во fork worker.
-3. UI поллит `GET /report-runs/:reportInstanceId`.
-4. По завершению артефакт доступен через `GET /generated-files/:fileId`.
-5. История запусков по коду отчета: `GET /reports/:reportCode/instances`.
-6. Политики `critical/non-critical`, retry и fallback для внешних зависимостей: [docs/external-dependency-resilience.md](./docs/external-dependency-resilience.md).
+2. `report-api` создает instance в status `queued` и ставит job в BullMQ (Redis).
+3. Асинхронная генерация выполняется выделенным worker-процессом (`pnpm start:worker`).
+4. UI поллит `GET /report-runs/:reportInstanceId`.
+5. По завершению артефакт доступен через `GET /generated-files/:fileId`.
+6. История запусков по коду отчета: `GET /reports/:reportCode/instances`.
+7. Политики `critical/non-critical`, retry и fallback для внешних зависимостей: [docs/external-dependency-resilience.md](./docs/external-dependency-resilience.md).
 
 ## Legacy API термины
 
@@ -223,7 +227,7 @@ docs/
 
 ## Важные ограничения текущей версии
 
-- Async запуск реализован через fork worker внутри API процесса.
+- Queue orchestration использует BullMQ + Redis; worker запускается отдельным процессом.
 - Репозитории доступа к данным пока mock-реализации.
 - CI/CD контур есть, но не доведен до production-grade.
 

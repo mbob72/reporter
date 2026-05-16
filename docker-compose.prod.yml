@@ -46,6 +46,20 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  worker:
+    image: ${API_IMAGE:-ghcr.io/example/reporter-api:latest}
+    command: ['node', 'apps/report-api/src/report-worker.main.js']
+    environment:
+      GENERATED_REPORTS_DIR: ${GENERATED_REPORTS_DIR:-/var/lib/reporter/generated-reports}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    volumes:
+      - generated_reports:/var/lib/reporter/generated-reports
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     image: ${WEB_IMAGE:-ghcr.io/example/reporter-web:latest}
     depends_on:

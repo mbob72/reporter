@@ -62,8 +62,9 @@
 Минимальные кодовые якоря для слайда:
 
 - Launch endpoint: [`apps/report-api/src/reports.controller.ts#L74`](../apps/report-api/src/reports.controller.ts#L74)
-- Runner -> worker fork: [`apps/report-api/src/report-instance.runner.ts#L203`](../apps/report-api/src/report-instance.runner.ts#L203)
-- Worker entrypoint: [`apps/report-api/src/report-instance.worker.ts#L86`](../apps/report-api/src/report-instance.worker.ts#L86)
+- Runner -> enqueue в BullMQ: [`apps/report-api/src/report-instance.runner.ts#L49`](../apps/report-api/src/report-instance.runner.ts#L49)
+- Queue adapter (`jobId/attempts/backoff`): [`apps/report-api/src/report-job.queue.ts#L23`](../apps/report-api/src/report-job.queue.ts#L23)
+- Worker entrypoint (`Nest ApplicationContext`): [`apps/report-api/src/report-worker.main.ts#L9`](../apps/report-api/src/report-worker.main.ts#L9)
 - Вызов definition launch: [`apps/report-api/src/report-launch.executor.ts#L43`](../apps/report-api/src/report-launch.executor.ts#L43)
 
 ## 4) Взаимодействие Frontend С Backend (дополнительно) (2:00)
@@ -120,7 +121,7 @@
 - `reportInstanceId` как единая сущность запуска (альтернатива: dual-модель/синхронный launch).
 - XLSX template как часть модели отчета (альтернатива: перенос формул в TS).
 - Repository boundary + mock adapters (альтернатива: прямые SQL/ORM из definition).
-- Async через fork worker (альтернатива: sync HTTP или сразу distributed queue).
+- Async через BullMQ + отдельный worker process (альтернатива: sync HTTP или in-process execution).
 - FS persistence `meta.json + artifact.bin` (альтернатива: сразу DB + object storage).
 - Retry стратегии по критичности внешних зависимостей (альтернатива: единая жесткая политика).
 

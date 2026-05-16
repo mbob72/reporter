@@ -1,89 +1,104 @@
 # Report Runtime Call Chain
 
-Ниже актуальный call-chain для `report-api` после перехода на единый HTTP pipeline: `requestId middleware -> JWT guard -> Zod pipes -> thin controllers -> services -> global exception filter`.
+Ниже актуальный call-chain после перехода на `BullMQ + Redis + отдельный worker`.
 
-## 1. Глобальный HTTP pipeline (для всех business endpoint-ов)
+## 1. Глобальный HTTP pipeline (business endpoints)
 
-1. `requestId` middleware добавляет/пробрасывает `x-request-id`:
-   [`request-id.middleware.ts#L13`](../apps/report-api/src/common/middleware/request-id.middleware.ts#L13)
-
-2. JWT guard проверяет `Authorization: Bearer <token>`, валидирует claims как `CurrentUser` и кладёт в `request.user`:
-   [`jwt-auth.guard.ts#L21`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L21),
-   [`jwt-auth.guard.ts#L47`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L47),
-   [`jwt-auth.guard.ts#L57`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L57)
-
-3. `@CurrentUser()` читает пользователя из `request.user`:
-   [`current-user.decorator.ts#L9`](../apps/report-api/src/common/auth/current-user.decorator.ts#L9)
-
-4. Route-level `ZodValidationPipe` валидирует `@Param/@Body` и отдаёт `400 VALIDATION_ERROR`:
-   [`zod-validation.pipe.ts#L5`](../apps/report-api/src/common/pipes/zod-validation.pipe.ts#L5)
-
-5. Controller остаётся thin и делегирует в service:
-   [`reports.controller.ts#L19`](../apps/report-api/src/reports.controller.ts#L19),
-   [`report-runs.controller.ts#L7`](../apps/report-api/src/report-runs.controller.ts#L7)
-
-6. Global exception filter маппит доменные ошибки и unknown:
-   [`api-exception.filter.ts#L33`](../apps/report-api/src/common/filters/api-exception.filter.ts#L33)
-
-7. Global interceptor пишет structured log (`method/path/status/latency/userId/requestId`):
-   [`request-logging.interceptor.ts#L21`](../apps/report-api/src/common/interceptors/request-logging.interceptor.ts#L21)
-
-8. Глобальная регистрация middleware/guard/filter/interceptor сделана в `AppModule`:
-   [`app.module.ts#L15`](../apps/report-api/src/app.module.ts#L15),
-   [`app.module.ts#L22`](../apps/report-api/src/app.module.ts#L22),
-   [`app.module.ts#L37`](../apps/report-api/src/app.module.ts#L37)
+1. `RequestIdMiddleware` добавляет/пробрасывает `x-request-id`:
+   [`request-id.middleware.ts#L13`](../apps/report-api/src/common/middleware/request-id.middleware.ts#L13).
+2. `JwtAuthGuard` валидирует `Authorization: Bearer <token>` и кладет `CurrentUser` в `request.user`:
+   [`jwt-auth.guard.ts#L22`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L22),
+   [`jwt-auth.guard.ts#L42`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L42),
+   [`jwt-auth.guard.ts#L65`](../apps/report-api/src/common/auth/jwt-auth.guard.ts#L65).
+3. `@CurrentUser()` извлекает пользователя из request context:
+   [`current-user.decorator.ts#L9`](../apps/report-api/src/common/auth/current-user.decorator.ts#L9).
+4. Route-level `ZodValidationPipe` валидирует `@Param/@Body`:
+   [`zod-validation.pipe.ts#L5`](../apps/report-api/src/common/pipes/zod-validation.pipe.ts#L5).
+5. Thin controllers делегируют в services:
+   [`reports.controller.ts#L20`](../apps/report-api/src/reports.controller.ts#L20),
+   [`report-runs.controller.ts#L8`](../apps/report-api/src/report-runs.controller.ts#L8).
+6. `ApiExceptionFilter` маппит доменные/transport ошибки в API response:
+   [`api-exception.filter.ts#L34`](../apps/report-api/src/common/filters/api-exception.filter.ts#L34).
+7. `RequestLoggingInterceptor` пишет structured request logs:
+   [`request-logging.interceptor.ts#L22`](../apps/report-api/src/common/interceptors/request-logging.interceptor.ts#L22).
+8. Глобальная регистрация pipeline в `AppModule`:
+   [`app.module.ts#L16`](../apps/report-api/src/app.module.ts#L16),
+   [`app.module.ts#L24`](../apps/report-api/src/app.module.ts#L24),
+   [`app.module.ts#L40`](../apps/report-api/src/app.module.ts#L40).
 
 ## 2. Launch flow (`POST /reports/:reportCode/launch`)
 
-1. Endpoint с `reportCode` param pipe, `body` pipe и `@CurrentUser()`:
-   [`reports.controller.ts#L74`](../apps/report-api/src/reports.controller.ts#L74)
-
-2. Контроллер делегирует в `ReportsLaunchService`:
+1. Endpoint принимает `reportCode`, `LaunchReportBody`, `@CurrentUser()`:
+   [`reports.controller.ts#L74`](../apps/report-api/src/reports.controller.ts#L74).
+2. Controller делегирует в `ReportsLaunchService.launchReport(...)`:
    [`reports.controller.ts#L83`](../apps/report-api/src/reports.controller.ts#L83),
-   [`reports-launch.service.ts#L19`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L19)
+   [`reports-launch.service.ts#L19`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L19).
+3. Service делает domain checks:
+   - report exists: [`reports-launch.service.ts#L20`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L20)
+   - role access: [`reports-launch.service.ts#L31`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L31)
+   - launch params schema: [`reports-launch.service.ts#L38`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38)
+4. Service вызывает `ReportInstanceRunner.start(...)`:
+   [`reports-launch.service.ts#L47`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L47).
+5. Runner:
+   - генерирует `reportInstanceId`: [`report-instance.runner.ts#L42`](../apps/report-api/src/report-instance.runner.ts#L42)
+   - создает queued instance в store: [`report-instance.runner.ts#L44`](../apps/report-api/src/report-instance.runner.ts#L44)
+   - enqueue job в BullMQ: [`report-instance.runner.ts#L49`](../apps/report-api/src/report-instance.runner.ts#L49)
+   - возвращает `{ reportInstanceId, status: 'queued' }`: [`report-instance.runner.ts#L56`](../apps/report-api/src/report-instance.runner.ts#L56)
+6. Queue adapter публикует job с `jobId=reportInstanceId`, `attempts`, `backoff`:
+   [`report-job.queue.ts#L22`](../apps/report-api/src/report-job.queue.ts#L22),
+   [`report-job.queue.ts#L24`](../apps/report-api/src/report-job.queue.ts#L24),
+   [`report-job.queue.ts#L25`](../apps/report-api/src/report-job.queue.ts#L25).
 
-3. Service выполняет domain checks (`report exists`, `role access`, `launch params schema`) и запускает runner:
-   [`reports-launch.service.ts#L20`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L20),
-   [`reports-launch.service.ts#L31`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L31),
-   [`reports-launch.service.ts#L38`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L38),
-   [`reports-launch.service.ts#L47`](../apps/report-api/src/modules/reports/services/reports-launch.service.ts#L47)
+## 3. Worker execution flow (BullMQ processor)
 
-4. Runner стартует async instance lifecycle:
-   [`report-instance.runner.ts#L145`](../apps/report-api/src/report-instance.runner.ts#L145)
+1. Worker процесс стартует через отдельный entrypoint:
+   [`report-worker.main.ts#L8`](../apps/report-api/src/report-worker.main.ts#L8).
+2. Поднимается `Nest ApplicationContext` c `WorkerAppModule`:
+   [`report-worker.main.ts#L9`](../apps/report-api/src/report-worker.main.ts#L9),
+   [`worker-app.module.ts#L8`](../apps/report-api/src/modules/worker-app.module.ts#L8).
+3. `ReportWorkerRuntimeService.start()` создает BullMQ `Worker`:
+   [`report-worker-runtime.service.ts#L14`](../apps/report-api/src/modules/report-worker/services/report-worker-runtime.service.ts#L14),
+   [`report-worker-runtime.service.ts#L19`](../apps/report-api/src/modules/report-worker/services/report-worker-runtime.service.ts#L19).
+4. На каждый job runtime вызывает `ReportJobProcessor.process(job)`:
+   [`report-worker-runtime.service.ts#L22`](../apps/report-api/src/modules/report-worker/services/report-worker-runtime.service.ts#L22),
+   [`report-job.processor.ts#L36`](../apps/report-api/src/report-job.processor.ts#L36).
+5. Processor lifecycle:
+   - `markRunning`: [`report-job.processor.ts#L40`](../apps/report-api/src/report-job.processor.ts#L40)
+   - вызов `executeReportLaunchInWorker(...)`: [`report-job.processor.ts#L42`](../apps/report-api/src/report-job.processor.ts#L42)
+   - progress updates в store: [`report-job.processor.ts#L47`](../apps/report-api/src/report-job.processor.ts#L47)
+   - `saveArtifact` + `markCompleted`: [`report-job.processor.ts#L58`](../apps/report-api/src/report-job.processor.ts#L58), [`report-job.processor.ts#L72`](../apps/report-api/src/report-job.processor.ts#L72)
+   - на ошибке `markFailed` и rethrow: [`report-job.processor.ts#L74`](../apps/report-api/src/report-job.processor.ts#L74)
+6. Где реально вызывается `reportDefinition.launch(...)`:
+   [`report-launch.executor.ts#L43`](../apps/report-api/src/report-launch.executor.ts#L43).
 
-## 3. Read flows (`/reports`, `/metadata`, `/tenants`, `/organizations`, `/shared-settings`, `/instances`)
-
-1. `ReportsController` endpoints:
-   [`reports.controller.ts#L30`](../apps/report-api/src/reports.controller.ts#L30),
-   [`reports.controller.ts#L36`](../apps/report-api/src/reports.controller.ts#L36),
-   [`reports.controller.ts#L46`](../apps/report-api/src/reports.controller.ts#L46),
-   [`reports.controller.ts#L58`](../apps/report-api/src/reports.controller.ts#L58),
-   [`reports.controller.ts#L64`](../apps/report-api/src/reports.controller.ts#L64),
-   [`reports.controller.ts#L86`](../apps/report-api/src/reports.controller.ts#L86)
-
-2. Query service orchestrates registry/data-access/store:
-   [`reports-query.service.ts#L21`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L21),
-   [`reports-query.service.ts#L39`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L39),
-   [`reports-query.service.ts#L57`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L57),
-   [`reports-query.service.ts#L94`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L94),
-   [`reports-query.service.ts#L104`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L104),
-   [`reports-query.service.ts#L123`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L123)
-
-## 4. Report-runs and file download flows
+## 4. Read flows
 
 1. `GET /report-runs/:reportInstanceId`:
    [`report-runs.controller.ts#L14`](../apps/report-api/src/report-runs.controller.ts#L14),
-   [`report-runs-query.service.ts#L14`](../apps/report-api/src/modules/report-runs/services/report-runs-query.service.ts#L14)
-
+   [`report-runs-query.service.ts#L15`](../apps/report-api/src/modules/report-runs/services/report-runs-query.service.ts#L15).
 2. `GET /generated-files/:fileId`:
    [`reports.controller.ts#L95`](../apps/report-api/src/reports.controller.ts#L95),
-   [`generated-files.service.ts#L10`](../apps/report-api/src/modules/reports/services/generated-files.service.ts#L10)
+   [`generated-files.service.ts#L15`](../apps/report-api/src/modules/reports/services/generated-files.service.ts#L15).
+3. List/read endpoints (`/reports`, `/metadata`, `/tenants`, `/organizations`, `/shared-settings`, `/instances`) обслуживает `ReportsQueryService`:
+   [`reports-query.service.ts#L33`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L33),
+   [`reports-query.service.ts#L44`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L44),
+   [`reports-query.service.ts#L63`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L63),
+   [`reports-query.service.ts#L99`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L99),
+   [`reports-query.service.ts#L113`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L113),
+   [`reports-query.service.ts#L124`](../apps/report-api/src/modules/reports/services/reports-query.service.ts#L124).
 
 ## 5. Public endpoints
 
-`GET /health` отмечен как public (`@Public()`), не требует JWT:
-[`health.controller.ts#L7`](../apps/report-api/src/health.controller.ts#L7)
+Public routes:
 
-`POST /auth/dev-token` тоже public и используется только для demo bootstrap JWT в `report-web`:
-[`auth.controller.ts#L21`](../apps/report-api/src/auth.controller.ts#L21),
-[`dev-auth.service.ts#L15`](../apps/report-api/src/modules/auth/services/dev-auth.service.ts#L15)
+- `GET /health`: [`health.controller.ts#L7`](../apps/report-api/src/health.controller.ts#L7)
+- `POST /auth/dev-token`: [`auth.controller.ts#L24`](../apps/report-api/src/auth.controller.ts#L24)
+- `POST /auth/refresh`: [`auth.controller.ts#L42`](../apps/report-api/src/auth.controller.ts#L42)
+- `POST /auth/logout`: [`auth.controller.ts#L65`](../apps/report-api/src/auth.controller.ts#L65)
+
+## 6. Runtime Notes
+
+- `report-instance.worker.ts` и IPC `fork per request` больше не участвуют в основном launch flow.
+- `REPORT_JOB_TIMEOUT_MS` сейчас читается в config, но в `queue.add(...)` не применяется напрямую (только `attempts/backoff/removeOn*`):
+  [`report-queue.config.ts#L41`](../apps/report-api/src/report-queue.config.ts#L41),
+  [`report-job.queue.ts#L23`](../apps/report-api/src/report-job.queue.ts#L23).
